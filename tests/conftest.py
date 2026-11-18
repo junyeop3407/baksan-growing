@@ -14,10 +14,16 @@ if SRC not in sys.path:
 def tk_root():
     """테스트 하나 동안 쓸 tkinter 창을 만들고 끝나면 닫는다."""
     tk = pytest.importorskip("tkinter")
-    try:
-        root = tk.Tk()
-    except tk.TclError:
-        pytest.skip("화면(디스플레이)이 없어 tkinter 창을 만들 수 없음")
+    # 어떤 컴퓨터(Python 3.14.0 + Tk 8.6.15)에서는 창을 많이 만들다 보면 가끔 Tcl 초기화가 실패한다
+    # ("Can't find a usable init.tcl"). 앱 문제가 아니라 환경 문제라 몇 번 다시 시도한다 (docs/NOTES.md).
+    for attempt in range(5):
+        try:
+            root = tk.Tk()
+            break
+        except tk.TclError as error:
+            last_error = error
+    else:
+        pytest.skip("화면(디스플레이)이 없어 tkinter 창을 만들 수 없음: " + str(last_error))
     root.withdraw()
     yield root
     root.destroy()

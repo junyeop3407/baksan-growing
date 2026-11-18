@@ -5,8 +5,8 @@ import time
 class PatternRng:
     """choice()는 정해 둔 총알 순서를 돌고, sample()은 앞에서부터 고른다."""
 
-    WEAK = ["연습탄", "연습탄", "보통탄", "보통탄", "보통탄", "연습탄", "연습탄", "연습탄", "보통탄"]  # 줄 0개, 13점
-    STRONG = ["철갑탄"] * 9                                                                         # 줄 8개, 405점
+    WEAK = ["연습탄", "연습탄", "보통탄", "보통탄", "보통탄", "연습탄", "연습탄", "연습탄", "보통탄"]  # 줄 0개 = 꽝
+    STRONG = ["철갑탄"] * 9                                                                         # 줄 8개 = 저격병 8명
 
     def __init__(self, pattern):
         self.pattern = list(pattern)
@@ -47,11 +47,18 @@ def start(app, name="박산"):
     app.start_button.invoke()
 
 
-def play_round(app):
-    """남은 스핀을 모두 돌리고 상점이나 게임 오버 화면이 될 때까지 기다린다."""
-    while True:
-        wait_until(app, lambda: not app.busy or app.screen != "game")
-        if app.screen != "game" or app.game.spins_left == 0:
+def spin_all(app, limit=20):
+    """골드가 허락하는 만큼(최대 limit번) 스핀한다. 매번 굴러가기가 끝날 때까지 기다린다."""
+    for _ in range(limit):
+        wait_until(app, lambda: not app.busy)
+        if not app.game.can_spin():
             break
         app.spin_button.invoke()
-    wait_until(app, lambda: app.screen in ("shop", "gameover"))
+    wait_until(app, lambda: not app.busy)
+
+
+def play_round(app):
+    """한 웨이브: 스핀 → [전투 시작] → 상점이나 게임 오버 화면이 될 때까지 기다린다."""
+    spin_all(app)
+    app.battle_button.invoke()
+    wait_until(app, lambda: app.screen in ("shop", "gameover"), timeout=15.0)

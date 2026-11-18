@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE TABLE IF NOT EXISTS records (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,             -- 기록 번호 (자동 증가)
     player_id     INTEGER NOT NULL REFERENCES players(id),       -- 누가 플레이했는지 (players.id)
-    round_reached INTEGER NOT NULL,                              -- 도달한 라운드 (게임 오버된 라운드)
-    score         INTEGER NOT NULL,                              -- 총점 (모든 라운드 점수의 합)
+    round_reached INTEGER NOT NULL,                              -- 도달한 웨이브 (게임 오버된 웨이브)
+    score         INTEGER NOT NULL,                              -- 점수 (처치 수×10 + 막은 웨이브×100)
     growth_stage  TEXT    NOT NULL,                              -- 게임 오버 때 계급 (이병/일병/상병/병장/하사)
     played_at     TEXT    NOT NULL                               -- 플레이한 시각 (YYYY-MM-DD HH:MM:SS)
 );

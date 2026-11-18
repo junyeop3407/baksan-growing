@@ -187,4 +187,29 @@ def test_on_spin_guard_without_button(tk_root, tmp_path):
     for _ in range(5):
         app.on_spin()
     wait_until(app, lambda: not app.busy)
-    assert app.game.spins_left == 4
+    assert app.game.gold == 400
+
+
+# ---- 2차(슬롯 디펜스) 리뷰 ----
+
+class FixedBoard:
+    """spin이 뽑는 9칸을 정해 둔다."""
+    def __init__(self, board):
+        self.board = list(board)
+
+    def choice(self, deck):
+        return self.board.pop(0)
+
+
+def test_spin_message_keeps_summons_when_some_slots_full():
+    """한 스핀에서 1명은 들어가고 1명은 칸이 꽉 차 돌려받으면, 문구에 소환과 반환이 둘 다 보인다."""
+    g = game.Game()
+    g.soldiers = [("연습탄", 1), ("보통탄", 1), ("예광탄", 1), ("철갑탄", 1), ("연습탄", 2)]
+    g.deck.append("황금탄")
+    g.soldiers.append(("황금탄", 3))   # 6칸 꽉 참. 황금탄 ★1 짝은 없음
+    # 첫 줄 보통탄 → ★1 짝과 합체(들어감), 둘째 줄 황금탄 → 짝 없음·칸 꽉 참(+50골드)
+    board = ["보통탄", "보통탄", "보통탄", "황금탄", "황금탄", "황금탄", "연습탄", "예광탄", "철갑탄"]
+    summoned = g.spin(FixedBoard(board))
+    assert summoned == ["보통탄", "황금탄"]
+    assert g.soldiers.count(("보통탄", 2)) == 1           # 보통탄은 짝과 합체
+    assert "소환" in g.message and "+50골드" in g.message

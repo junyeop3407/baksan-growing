@@ -1,24 +1,33 @@
-# 총알(심볼) 5종과 박산 계급 5단계를 정의하고, 총알을 Canvas에 그리는 함수를 둔다.
+# 총알(심볼) 5종과 총알마다 소환되는 병사, 박산 계급 5단계를 정의하고, 총알을 Canvas에 그리는 함수를 둔다.
 # tkinter를 import하지 않아 game.py가 화면 없이도 이 파일을 쓸 수 있다.
 
-# 총알 순서 (점수가 낮은 것부터)
+# 총알 순서 (병사 공격력이 낮은 것부터)
 BULLET_ORDER = ["연습탄", "보통탄", "예광탄", "철갑탄", "황금탄"]
 
-# 총알마다 점수와 모양
+# 총알마다 모양
 #   length: 칸 안 그림 영역 높이에 대한 총알 길이 비율
 #   tip: 탄두 색, tip_end: 탄두 끝 색, case: 탄피 색, pointy: 뾰족한 탄두인지
 BULLETS = {
-    "연습탄": {"points": 1, "length": 0.75, "tip": "#3a6fd8", "tip_end": "#3a6fd8", "case": "#c9a64a", "pointy": False},
-    "보통탄": {"points": 2, "length": 0.97, "tip": "#b8693a", "tip_end": "#b8693a", "case": "#d4b04c", "pointy": False},
-    "예광탄": {"points": 3, "length": 0.97, "tip": "#b8693a", "tip_end": "#e02020", "case": "#d4b04c", "pointy": False},
-    "철갑탄": {"points": 5, "length": 1.0, "tip": "#7a7f87", "tip_end": "#111111", "case": "#d4b04c", "pointy": True},
-    "황금탄": {"points": 8, "length": 0.95, "tip": "#f5c518", "tip_end": "#f5c518", "case": "#e8b923", "pointy": False},
+    "연습탄": {"length": 0.75, "tip": "#3a6fd8", "tip_end": "#3a6fd8", "case": "#c9a64a", "pointy": False},
+    "보통탄": {"length": 0.97, "tip": "#b8693a", "tip_end": "#b8693a", "case": "#d4b04c", "pointy": False},
+    "예광탄": {"length": 0.97, "tip": "#b8693a", "tip_end": "#e02020", "case": "#d4b04c", "pointy": False},
+    "철갑탄": {"length": 1.0, "tip": "#7a7f87", "tip_end": "#111111", "case": "#d4b04c", "pointy": True},
+    "황금탄": {"length": 0.95, "tip": "#f5c518", "tip_end": "#f5c518", "case": "#e8b923", "pointy": False},
+}
+
+# 총알마다 소환되는 병사: 이름과 ★1 초당 공격력 (기획서 3) "총알 = 병사")
+SOLDIERS = {
+    "연습탄": {"name": "훈련병", "dps": 5},
+    "보통탄": {"name": "소총병", "dps": 10},
+    "예광탄": {"name": "기관총병", "dps": 15},
+    "철갑탄": {"name": "저격병", "dps": 25},
+    "황금탄": {"name": "특급전사", "dps": 40},
 }
 
 # 처음 덱에 들어 있는 총알 개수 (황금탄은 상점에서만 얻는다)
 START_DECK = {"연습탄": 4, "보통탄": 3, "예광탄": 2, "철갑탄": 1}
 
-# 박산 계급: (이름, 얼굴의 최산 비율). 라운드를 통과할 때마다 한 칸씩 오른다.
+# 박산 계급: (이름, 얼굴의 최산 비율). 웨이브를 막을 때마다 한 칸씩 오른다.
 RANKS = [("이병", 0.0), ("일병", 0.25), ("상병", 0.5), ("병장", 0.75), ("하사", 1.0)]
 
 # 같은 총알 3개가 맞은 줄을 강조하는 테두리 두께(px)

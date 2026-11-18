@@ -8,7 +8,7 @@ import pytest
 import character
 import db
 import ui
-from helpers import PatternRng, pump, start, play_round, wait_until
+from helpers import PatternRng, pump, start, play_round, spin_all, wait_until
 
 FAST = 0.01
 
@@ -74,7 +74,7 @@ def test_f2_new_bubble_replaces_old(make_app):
 
 @pytest.mark.parametrize("text", ["난 최산을 닮았다", "난 섹시해.... ㅋ", "she's so BAD..."])
 def test_f3_bubble_stays_in_its_area(make_app, text):
-    """F3: 말풍선은 창 안에 있고 계급장·슬롯판과 겹치지 않는다 (가장 작은 창 기준 Canvas)."""
+    """F3: 말풍선은 창 안에 있고 계급장·슬롯판·병사 칸과 겹치지 않는다 (가장 작은 창 기준 Canvas)."""
     app = make_app()
     start(app)
     app.show_bubble(text)
@@ -82,13 +82,14 @@ def test_f3_bubble_stays_in_its_area(make_app, text):
     assert bubble[0] >= 0 and bubble[1] >= 0 and bubble[2] <= ui.CANVAS_W and bubble[3] <= ui.CANVAS_H
     assert not overlaps(bubble, app.canvas.bbox("hero&&badge"))
     assert not overlaps(bubble, app.canvas.bbox("board"))
+    assert not overlaps(bubble, app.canvas.bbox("slot_box"))
     for _, pose in character.DANCE_STEPS:
         app.draw_hero(pose)
         assert not overlaps(bubble, app.canvas.bbox("hero&&badge"))
 
 
 def test_f4_spin_mashing_counts_once(make_app):
-    """F4: 말풍선이 떠 있는 동안 스핀을 빠르게 5번 눌러도 한 번만 처리된다."""
+    """F4: 말풍선이 떠 있는 동안 스핀을 빠르게 5번 눌러도 한 번만 처리되고 골드도 한 번 몫만 준다."""
     app = make_app()
     start(app)
     app.show_bubble("난 섹시해.... ㅋ")
@@ -96,19 +97,19 @@ def test_f4_spin_mashing_counts_once(make_app):
         app.spin_button.invoke()
     assert app.spin_button["state"] == "disabled"
     wait_until(app, lambda: not app.busy)
-    assert app.game.spins_left == 4
+    assert app.game.gold == 400
     assert app.spin_button["state"] == "normal"
 
 
-def test_f5_sexy_bubble_from_round_two(make_app):
-    """F5: 1라운드 시작에는 말풍선이 없고, 2라운드 시작 때 "난 섹시해.... ㅋ"."""
+def test_f5_sexy_bubble_from_wave_two(make_app):
+    """F5: 1웨이브 준비 단계에는 말풍선이 없고, 2웨이브 준비 단계 시작 때 "난 섹시해.... ㅋ"."""
     app = make_app(PatternRng.STRONG)
     start(app)
     assert bubble_texts(app) == []
     play_round(app)
     assert app.screen == "shop"
     app.shop_buttons[0].invoke()
-    assert app.screen == "game" and app.game.round_no == 2
+    assert app.screen == "game" and app.game.wave == 2
     assert bubble_texts(app) == ["난 섹시해.... ㅋ"]
 
 
@@ -123,16 +124,16 @@ def test_f6_gameover_bubble(make_app):
 
 # ---- G. 춤 ----
 
-def test_g1_pass_starts_dance_and_blocks_spin(make_app):
-    """G1: 라운드 통과 → 춤 + "난 최산을 닮았다", 춤 동안 스핀 버튼이 막힌다."""
+def test_g1_wave_clear_starts_dance_and_blocks_buttons(make_app):
+    """G1: 웨이브를 막으면 춤 + "난 최산을 닮았다", 춤 동안 [스핀]·[전투 시작]이 막힌다."""
     app = make_app(PatternRng.STRONG, time_scale=0.2)
     start(app)
-    for _ in range(5):
-        wait_until(app, lambda: not app.busy)
-        app.spin_button.invoke()
-    wait_until(app, lambda: app.dancing)
+    spin_all(app)
+    app.battle_button.invoke()
+    wait_until(app, lambda: app.dancing, timeout=15.0)
     assert bubble_texts(app) == ["난 최산을 닮았다"]
     assert app.spin_button["state"] == "disabled"
+    assert app.battle_button["state"] == "disabled"
 
 
 def test_g2_dance_then_shop(make_app):
@@ -217,36 +218,82 @@ def test_h1_title(make_app):
 
 
 def test_h2_one_full_game(make_app, tmp_path):
-    """H2: 한 판 끝까지(탈락 고정) → 게임 오버 화면 문구, DB에 1개 저장."""
+    """H2: 병사 0명으로 전투(꽝만 나옴) → 하트 0 → 게임 오버 화면 문구, DB에 웨이브 1·이병 1개."""
     app = make_app(PatternRng.WEAK)
     start(app, "한판")
     play_round(app)
     assert app.screen == "gameover"
+    assert app.game.soldiers == [] and app.game.hearts <= 0
     text = " ".join(app.result_lines)
-    assert "65" in text and "1" in text and "이병" in text
+    assert "점수 0" in text and "웨이브 1" in text and "이병" in text
     assert app.save_message == "기록이 DB에 저장되었습니다"
     rows = db.get_top10(str(tmp_path / "game.db"))
-    assert [(r["name"], r["score"], r["round_reached"], r["growth_stage"]) for r in rows] == [("한판", 65, 1, "이병")]
+    assert [(r["name"], r["score"], r["round_reached"], r["growth_stage"]) for r in rows] == [("한판", 0, 1, "이병")]
 
 
 def test_h3_ranking_columns(make_app):
-    """H3: 랭킹 화면 열은 순위 / 이름 / 점수 / 라운드 / 계급 / 플레이 날짜."""
+    """H3: 랭킹 화면 열은 순위 / 이름 / 점수 / 웨이브 / 계급 / 플레이 날짜."""
     app = make_app()
     app.ranking_button.invoke()
     tree = app.ranking_tree
     headings = [tree.heading(col)["text"] for col in tree["columns"]]
-    assert headings == ["순위", "이름", "점수", "라운드", "계급", "플레이 날짜"]
+    assert headings == ["순위", "이름", "점수", "웨이브", "계급", "플레이 날짜"]
 
 
 def test_h4_retry_same_name(make_app):
-    """H4: [다시하기] → 같은 이름, 1라운드, 이병."""
+    """H4: [다시하기] → 같은 이름, 1웨이브, 이병, 골드 500, 하트 3, 병사 0."""
     app = make_app(PatternRng.WEAK)
     start(app, "다시")
     play_round(app)
     app.retry_button.invoke()
     assert app.screen == "game"
     assert app.player_name == "다시"
-    assert (app.game.round_no, app.game.rank, app.game.total_score) == (1, "이병", 0)
+    g = app.game
+    assert (g.wave, g.rank, g.gold, g.hearts, g.soldiers) == (1, "이병", 500, 3, [])
+
+
+# ---- N26~N28: 전투 화면 ----
+
+def test_n26_buttons_blocked_during_battle(make_app):
+    """N26: 전투 중에는 [스핀]·[전투 시작]이 막히고, 눌러도 아무 일이 없다."""
+    app = make_app(time_scale=1.0)
+    start(app)
+    app.battle_button.invoke()
+    assert app.game.phase == "battle"
+    assert app.spin_button["state"] == "disabled"
+    assert app.battle_button["state"] == "disabled"
+    gold = app.game.gold
+    app.on_spin()
+    app.on_battle()
+    pump(app, 100)
+    assert app.game.gold == gold and app.game.phase == "battle"
+
+
+def test_n27_close_during_battle(tmp_path):
+    """N27: 전투 도중 창을 닫으면 오류 없이 끝나고 남은 예약이 없다."""
+    root = tk.Tk()
+    root.withdraw()
+    app = ui.App(root, str(tmp_path / "game.db"), rng=PatternRng(PatternRng.WEAK), time_scale=1.0)
+    start(app)
+    app.battle_button.invoke()
+    pump(app, 300)
+    assert app.game.phase == "battle"
+    app.close()
+    assert app.after_ids == set()
+
+
+def test_n28_slots_stars_hearts_visible(make_app):
+    """N28: 화면에 병사 칸 6개, 병사 별 개수, 하트 수가 보인다."""
+    app = make_app(PatternRng.STRONG)
+    start(app)
+    c = app.canvas
+    assert len(c.find_withtag("slot_box")) == 6
+    assert len(c.find_withtag("hearts")) == 3
+    assert c.find_withtag("star") == ()
+    app.spin_button.invoke()
+    wait_until(app, lambda: not app.busy)
+    assert app.game.soldiers == [("철갑탄", 3), ("철갑탄", 3)]
+    assert len(c.find_withtag("star")) == 6
 
 
 # ---- 사장 요청 경계값 (이름·랭킹 표·시작 화면) ----

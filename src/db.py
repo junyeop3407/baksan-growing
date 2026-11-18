@@ -86,7 +86,7 @@ def get_or_create_player(path, name):
 
 
 def save_record(path, name, round_reached, score, growth_stage, played_at=None):
-    """게임 오버 기록을 저장하고 기록 번호를 돌려준다."""
+    """게임 오버 기록을 저장하고 기록 번호를 돌려준다. round_reached = 도달한 웨이브(게임 오버된 웨이브)."""
     # SQL: (플레이어 찾기·등록은 find_or_add_player)
     #      INSERT INTO records (player_id, round_reached, score, growth_stage, played_at)
     #      VALUES (?, ?, ?, ?, ?)
