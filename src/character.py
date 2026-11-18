@@ -43,7 +43,7 @@ CHOISAN = {
     "face_top_w": 54, "cheek_w": 52, "jaw_w": 38, "chin_w": 10, "chin_y": 84,
     "skin": "#f3c8a2",
     # 머리: 검정, 젖은 듯한 질감, 이마와 한쪽 눈 위로 흘러내리는 앞머리 가닥
-    "hair": "#0c0e14", "hair_top": 100, "hair_side_w": 66, "hair_side_y": 20, "fringe_y": -46,
+    "hair": "#0c0e14", "hair_top": 100, "hair_side_w": 66, "hair_side_y": 20, "fringe_y": -58,
     "curl": 0.0, "strands": 1.0, "gloss": 1.0,
     # 귀: 머리에 가려 거의 안 보임
     "ear_show": 0.0,
@@ -206,7 +206,7 @@ def draw_head(canvas, f, p, at, flat, scale, tags, dy):
         inner = at(side * 11, f["brow_y"], HEAD_Y, dy)
         outer = at(side * (11 + f["brow_len"]), f["brow_y"] - f["brow_tilt"], HEAD_Y, dy)
         canvas.create_line(*inner, *outer, fill=f["hair"], width=f["brow_thick"] * scale,
-                           capstyle="round", tags=tags)
+                           capstyle="round", tags=tags + ("brow",))
 
     # 눈 (아몬드 모양 흰자 + 눈동자). squint가 작을수록 가늘게 뜬다.
     eye_h = f["eye_h"] * p["squint"]
@@ -279,19 +279,21 @@ def draw_hair(canvas, f, at, flat, scale, tags, dy):
 
 
 def draw_strands(canvas, f, at, flat, scale, tags, dy):
-    """이마와 오른쪽 눈 위로 흘러내리는 앞머리 가닥. 비율만큼 길어지고 진해진다."""
+    """이마에서 시작해 오른쪽 눈썹 위에서 끝나는 가는 앞머리 가닥 2개. 비율만큼 길어지고 진해진다."""
     if f["strands"] <= 0.02:
         return
     color = mix_color(f["skin"], f["hair"], f["strands"])
     root_y = f["fringe_y"] + 2
-    for sx, length, sweep, root_w in [(6, 30, 14, 7), (16, 46, 22, 8), (28, 40, 20, 6)]:
+    for sx, sweep, root_w in [(12, 5, 4), (24, 6, 3.5)]:
         end_x = sx + sweep * f["strands"]
-        end_y = root_y + length * f["strands"]
-        mid_x = sx + sweep * f["strands"] * 0.35
+        lowest = f["brow_y"] - f["brow_tilt"] - f["brow_thick"] - 4   # 눈썹 가장 높은 곳보다 넉넉히 위
+        end_y = root_y + (lowest - root_y) * f["strands"]
+        mid_x = sx + sweep * f["strands"] * 0.4
         mid_y = (root_y + end_y) / 2
         wedge = [(sx - root_w / 2, root_y - 4), (mid_x - root_w / 3, mid_y), (end_x, end_y),
                  (mid_x + root_w / 3, mid_y), (sx + root_w / 2, root_y - 4)]
-        canvas.create_polygon(flat(wedge, HEAD_Y, dy), fill=color, outline=color, smooth=True, tags=tags)
+        canvas.create_polygon(flat(wedge, HEAD_Y, dy), fill=color, outline=color, smooth=True,
+                              tags=tags + ("strand",))
 
 
 def draw_rank_badge(canvas, bx, by, rank_name, scale=1.0, tags=()):

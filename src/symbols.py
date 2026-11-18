@@ -8,11 +8,11 @@ BULLET_ORDER = ["연습탄", "보통탄", "예광탄", "철갑탄", "황금탄"]
 #   length: 칸 안 그림 영역 높이에 대한 총알 길이 비율
 #   tip: 탄두 색, tip_end: 탄두 끝 색, case: 탄피 색, pointy: 뾰족한 탄두인지
 BULLETS = {
-    "연습탄": {"points": 1, "length": 0.6, "tip": "#3a6fd8", "tip_end": "#3a6fd8", "case": "#c9a64a", "pointy": False},
-    "보통탄": {"points": 2, "length": 0.8, "tip": "#b8693a", "tip_end": "#b8693a", "case": "#d4b04c", "pointy": False},
-    "예광탄": {"points": 3, "length": 0.8, "tip": "#b8693a", "tip_end": "#e02020", "case": "#d4b04c", "pointy": False},
+    "연습탄": {"points": 1, "length": 0.75, "tip": "#3a6fd8", "tip_end": "#3a6fd8", "case": "#c9a64a", "pointy": False},
+    "보통탄": {"points": 2, "length": 0.97, "tip": "#b8693a", "tip_end": "#b8693a", "case": "#d4b04c", "pointy": False},
+    "예광탄": {"points": 3, "length": 0.97, "tip": "#b8693a", "tip_end": "#e02020", "case": "#d4b04c", "pointy": False},
     "철갑탄": {"points": 5, "length": 1.0, "tip": "#7a7f87", "tip_end": "#111111", "case": "#d4b04c", "pointy": True},
-    "황금탄": {"points": 8, "length": 0.85, "tip": "#f5c518", "tip_end": "#f5c518", "case": "#e8b923", "pointy": False},
+    "황금탄": {"points": 8, "length": 0.95, "tip": "#f5c518", "tip_end": "#f5c518", "case": "#e8b923", "pointy": False},
 }
 
 # 처음 덱에 들어 있는 총알 개수 (황금탄은 상점에서만 얻는다)
@@ -30,15 +30,15 @@ OUTLINE = "#2b2b2b"
 def draw_bullet(canvas, kind, x, y, size, tag=""):
     """(x, y)에서 시작하는 size×size 칸 안에 총알 그림과 이름 글자를 그린다."""
     info = BULLETS[kind]
-    margin = HIGHLIGHT_WIDTH + 4
-    label_px = max(11, size // 8)
+    margin = HIGHLIGHT_WIDTH + 3
+    label_px = max(14, size // 7)
     canvas.create_text(x + size / 2, y + size - margin, text=kind, anchor="s",
                        font=("Malgun Gothic", -label_px, "bold"), fill="#1a1a1a", tags=tag)
 
     area_top = y + margin
-    area_bottom = y + size - margin - label_px - 6
-    height = (area_bottom - area_top) * info["length"]
-    width = max(10, size * 0.2)
+    area_bottom = y + size - margin - label_px * 1.45 - 2   # 글자 줄 높이만큼 비워 둔다
+    height = (area_bottom - area_top) * info["length"]       # 보통탄이 칸 높이의 약 60%
+    width = max(12, size * 0.22)
     cx = x + size / 2
     left, right = cx - width / 2, cx + width / 2
 

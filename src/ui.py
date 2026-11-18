@@ -41,6 +41,9 @@ BG = "#e8ecdf"
 ARMY = "#4b5320"
 PANEL = "#fbfbf7"
 INK = "#1a1a1a"
+HINT_GRAY = "#a0a0a0"   # 빈 판 안내 글씨
+NOTE_GRAY = "#6b6b6b"   # 오류가 아닌 안내 문구
+ERROR_RED = "#b00020"   # 오류 문구에만 쓴다
 
 
 class App:
@@ -220,6 +223,9 @@ class App:
                 draw_bullet(self.canvas, board[i], x, y, CELL, tag=("board", "cell"))
             if i in lit:
                 draw_highlight(self.canvas, x, y, CELL, tag=("board", "cell"))
+        if not board:
+            self.canvas.create_text(BOARD_X + 1.5 * CELL, BOARD_Y + 1.5 * CELL, text="스핀을 눌러 시작하세요",
+                                    font=(FONT, 16, "bold"), fill=HINT_GRAY, tags=("board", "cell", "hint"))
 
     def draw_hero(self, pose=None):
         """지금 계급의 얼굴과 계급장으로 캐릭터를 다시 그린다."""
@@ -414,7 +420,8 @@ class App:
             for n, r in enumerate(rows, 1):
                 self.ranking_tree.insert("", "end", values=(n, r["name"], r["score"], r["round_reached"],
                                                             r["growth_stage"], r["played_at"]))
-        self.ranking_message = tk.Label(self.frame, text=message, font=(FONT, 13), bg=BG, fg="#b00020")
+        color = NOTE_GRAY if message == MSG_NO_RECORDS else ERROR_RED
+        self.ranking_message = tk.Label(self.frame, text=message, font=(FONT, 13), bg=BG, fg=color)
         self.ranking_message.pack(pady=6)
         self.ranking_back_button = self.button(self.frame, "뒤로", self.show_start)
         self.ranking_back_button.pack(pady=6)
