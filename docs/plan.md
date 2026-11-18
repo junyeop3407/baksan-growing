@@ -84,7 +84,7 @@
      - `draw_character(canvas, x, y, t, rank_name, pose=None)`: 태그 body / arm_l / arm_r / head / badge로 나눠 그린다. 영역 W×H 안에 들어가게 한다.
      - `draw_rank_badge`: 이병~병장은 가로 막대 1~4개, 하사는 V자 + 막대
      - `pose`는 나중에 춤에 쓴다. 지금은 기본 자세만 그린다.
-5. `tests/tools/make_previews.py`로 미리보기 이미지를 만든다.
+5. `tests/tools/make_previews.py`로 미리보기 이미지를 만든다. (2026-11-19: 도트 그래픽으로 바뀌며 `tests/tools/make_sprite_preview.py`로 대체하고 이 도구와 흑백본은 삭제) (2026-11-19: 도트 그래픽으로 바뀌며 `tests/tools/make_sprite_preview.py`로 대체하고 이 도구와 흑백본은 삭제)
    - 계급 5개 얼굴을 나란히 그린 창을 맨 앞에 띄운다.
    - 얼굴마다 아래에 "이병 0%"처럼 계급과 비율을 적는다.
    - PowerShell(System.Drawing)로 그 창만 캡처해 `images/faces_preview.png`로 저장한다.

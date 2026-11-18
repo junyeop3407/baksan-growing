@@ -123,7 +123,7 @@ def test_badge_follows_head_only(tk_root):
     assert part_top(moved, "body") == part_top(still, "body")
 
 
-BIG_POSE = {"arm_raise": 1.0, "hand_drop": 12, "body_dy": 12, "body_grow": 0.06, "head_dy": 12, "squint": 0.5}
+BIG_POSE = {"arm_raise": 1.0, "hand_drop": 12, "body_dy": 12, "body_grow": 0.06, "head_dy": 12}
 
 
 @pytest.mark.parametrize("pose", [None, {"arm_raise": 1.0}, {"hand_drop": 12}, BIG_POSE])
@@ -222,6 +222,25 @@ def test_spin_message_keeps_summons_when_some_slots_full():
     assert summoned == ["보통탄", "황금탄"]
     assert g.soldiers.count(("보통탄", 2)) == 1           # 보통탄은 짝과 합체
     assert "소환" in g.message and "+50골드" in g.message
+
+
+# ---- 4차(화면 다듬기) 리뷰 ----
+
+def test_big_dragon_at_line_does_not_cover_soldier_slots(tk_root, tmp_path):
+    """2배 커진 드래곤이 방어선(거리 0)까지 와도 병사 칸 오른쪽 끝보다 오른쪽에 그려진다."""
+    app = ui.App(tk_root, str(tmp_path / "g.db"), rng=PatternRng(PatternRng.WEAK), time_scale=1.0)
+    start(app)
+    g = app.game
+    g.wave = 5
+    g.start_battle()
+    g.queue = [q for q in g.queue if q[1]]
+    g.battle_step(0.01)
+    boss = g.enemies[0]
+    boss["x"] = 0.0
+    app.draw_enemies()
+    slots_right = ui.SLOT_X + 2 * ui.SLOT_W + ui.SLOT_GAP
+    assert app.canvas.bbox(app.enemy_items[id(boss)][1])[0] >= slots_right
+    app.cancel_all()
 
 
 # ---- 3차(픽셀 아트) 리뷰 ----

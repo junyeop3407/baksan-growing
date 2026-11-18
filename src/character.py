@@ -11,9 +11,9 @@ HEIGHT = 360
 # 춤이 아닌 기본 자세. body_dy는 몸통(팔 포함), head_dy는 머리(계급장 포함)가 위로 올라가는 px(scale=1 기준,
 # 도트 칸 단위로 반올림). 머리는 head_dy만큼만 움직인다(몸통이 올라가도 머리는 반 박자 늦게 따라온다).
 # 팔 그림(도트 프레임): arm_raise < 0.5 내림 / 가슴 앞 / hand_drop > 0이면 툭 내림 / body_grow ≥ 0.08이면 크게.
-# body_grow > 0이면 가슴을 넓힌 몸통 그림. squint(눈 뜬 정도)는 도트 얼굴에서는 쓰지 않는다.
+# body_grow > 0이면 가슴을 넓힌 몸통 그림.
 DEFAULT_POSE = {"arm_raise": 0.0, "hand_drop": 0.0, "body_dy": 0.0, "body_grow": 0.0,
-                "head_dy": 0.0, "squint": 1.0}
+                "head_dy": 0.0}
 
 TOP_MARGIN = 2      # 춤으로 위로 올라갈 자리 (칸)
 ROWS = {"badge": 2, "head": 10, "body": 32, "arm": 33, "podium": 45}
@@ -111,8 +111,8 @@ def draw_character(canvas, x, y, t, rank_name, pose=None, scale=1.0, tag="char")
 
 
 def dance_pose(drop=0.0, bounce=0.0, grow=0.0, head=0.0):
-    """가슴 튕기기 춤의 한 자세: 팔은 가슴 높이로 들고 눈은 가늘게 뜬다."""
-    return {"arm_raise": 1.0, "squint": 0.5, "hand_drop": drop, "body_dy": bounce,
+    """가슴 튕기기 춤의 한 자세: 팔은 가슴 높이로 든다."""
+    return {"arm_raise": 1.0, "hand_drop": drop, "body_dy": bounce,
             "body_grow": grow, "head_dy": head}
 
 

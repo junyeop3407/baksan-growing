@@ -40,7 +40,8 @@ HEART_X, HEART_Y = 868, 30         # 하트 첫 칸 가운데
 
 # 도트 배율과 움직임 (틱 = TICK_MS)
 SOLDIER_DOT = 3                    # 병사 22×20칸 → 66×60px
-DRAGON_DOT = 3                     # 드래곤 40×26칸 → 120×78px
+DRAGON_DOT = 6                     # 드래곤 40×26칸 → 240×156px (고블린 72px 높이의 약 2배)
+BOSS_DROP = 20                     # 드래곤 발을 가운데 줄보다 조금 아래로 (BOSS 글자가 "몬스터 출현"과 안 겹치게)
 WALK_TICKS = 4                     # 적 걷기 프레임을 바꾸는 틱 수
 DRAGON_TICKS = 6                   # 드래곤 날갯짓
 SHOT_TICKS = 6                     # 총알이 총구에서 적까지 날아가는 틱 수
@@ -106,7 +107,7 @@ class App:
         self.hero_place = (CHAR_X, CHAR_Y, HERO_SCALE)
         self.bubble_box = BUBBLE_BOX
         self.tick_count = 0
-        self.enemy_items = {}       # id(적) → (적, 그림, 체력 바탕, 체력 막대) 캔버스 항목
+        self.enemy_items = {}       # id(적) → (적, 그림, 체력 바탕, 체력 막대, [BOSS 글자]) 캔버스 항목
         self.shot_items = {}        # 병사 칸 번호 → 날아가는 총알 그림 항목
         self.soldier_sprites = []   # [(병사 그림 항목, 총알 종류)] 칸 순서
 
@@ -428,32 +429,45 @@ class App:
             key = id(enemy)
             entry = self.enemy_items.get(key)
             if entry is not None and entry[0] is not enemy:
-                c.delete(*entry[1:])
+                self.delete_enemy(key)
                 entry = None
             boss = enemy["boss"]
             kind = "dragon" if boss else pa.enemy_kind(self.game.wave)
             lane = 1 if boss else enemy.get("lane", 0) % 3
             frame = (self.tick_count // (DRAGON_TICKS if boss else WALK_TICKS) + lane) % 2
             img = self.enemy_img(kind, frame)
-            x = min(self.enemy_screen_x(enemy), CANVAS_W - img.width() / 2 - 2)   # 나올 때도 화면 안에
-            y = LANE_Y[lane]
+            half = img.width() / 2
+            x = min(self.enemy_screen_x(enemy), CANVAS_W - half - 2)        # 나올 때도 화면 안에
+            x = max(x, ENEMY_X0 - 32 + half)       # 큰 드래곤도 왼쪽 끝은 바리케이드까지만 (병사 칸을 덮지 않게)
+            y = LANE_Y[lane] + (BOSS_DROP if boss else 0)
             top = y - img.height()
-            bar_w = 80 if boss else 40
+            bar_w, bar_h = (120, 10) if boss else (40, 6)
             ratio = max(0.0, enemy["hp"] / enemy["max_hp"])
             if entry is None:
                 pic = c.create_image(x, y, image=img, anchor="s", tags=("enemy", kind))
                 back = c.create_rectangle(0, 0, 0, 0, fill="#3a3a3a", outline="", tags="enemy")
                 bar = c.create_rectangle(0, 0, 0, 0, fill="#e63946", outline="", tags="enemy")
-                entry = (enemy, pic, back, bar)
+                label = ()
+                if boss:                                            # 보스는 막대 위에 "BOSS" (그림자 + 글자)
+                    label = tuple(c.create_text(0, 0, text="BOSS", anchor="s", font=(FONT, 14, "bold"), fill=color,
+                                                tags="boss_label") for color in (SHADOW, FLASH))
+                entry = (enemy, pic, back, bar, label)
                 self.enemy_items[key] = entry
-            _, pic, back, bar = entry
+            _, pic, back, bar, label = entry
             c.coords(pic, x, y)
             c.itemconfig(pic, image=img)
-            c.coords(back, x - bar_w / 2, top - 10, x + bar_w / 2, top - 4)
-            c.coords(bar, x - bar_w / 2, top - 10, x - bar_w / 2 + bar_w * ratio, top - 4)
+            c.coords(back, x - bar_w / 2, top - 4 - bar_h, x + bar_w / 2, top - 4)
+            c.coords(bar, x - bar_w / 2, top - 4 - bar_h, x - bar_w / 2 + bar_w * ratio, top - 4)
+            for n, item in enumerate(label):
+                c.coords(item, x + 1 - n, top - 6 - bar_h + 1 - n)
             seen.add(key)
         for key in [k for k in self.enemy_items if k not in seen]:
-            c.delete(*self.enemy_items.pop(key)[1:])
+            self.delete_enemy(key)
+
+    def delete_enemy(self, key):
+        """적 하나의 캔버스 항목(그림·체력 막대·BOSS 글자)을 지우고 목록에서 뺀다."""
+        _, pic, back, bar, label = self.enemy_items.pop(key)
+        self.canvas.delete(pic, back, bar, *label)
 
     def draw_shots(self):
         """병사마다 총구에서 방어선에 가장 가까운 적까지 작은 도트 총알이 날아가고, 쏘는 순간 병사는 사격 프레임."""

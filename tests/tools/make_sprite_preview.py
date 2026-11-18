@@ -1,8 +1,9 @@
-# 도트 그림 미리보기 3장 (사장 검토용, 게임 코드에는 아직 연결하지 않음):
+# 도트 그림 미리보기 (사장 검토·README용):
 #   images/sprites_preview.png  박산·병사·적·드래곤·총알·하트·바리케이드·버튼·정보판
 #   images/faces_preview.png    계급 5단계 도트 얼굴
 #   _captures/02_mock.png       새 그래픽을 입힌 준비 화면 시안
-# 세 장 모두 _captures/에도 복사한다. 키·마우스 입력은 보내지 않고 창만 캡처한다(키 입력 안전 규칙).
+#   images/dance_preview.png    춤 도트 자세 3장
+# images/의 것은 _captures/에도 복사한다. 키·마우스 입력은 보내지 않고 창만 캡처한다(키 입력 안전 규칙).
 # 실행 (앱 폴더에서): python tests/tools/make_sprite_preview.py
 import os
 import shutil
@@ -14,6 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, os.path.join(APP_DIR, "src"))
 
+import character  # noqa: E402
 import pixel_art as pa  # noqa: E402
 from symbols import BULLET_ORDER, RANKS, SOLDIERS  # noqa: E402
 
@@ -208,6 +210,22 @@ def mock_prepare(root, path):
     capture(root, c, path)
 
 
+# ---------------------------------------------------------------- 4. 춤 도트 자세
+
+def dance_sheet(root, path):
+    """웨이브를 막았을 때 추는 춤의 도트 자세 3장 (가슴 앞 → 손 툭 내리며 튕기기 → 마지막 크게)."""
+    c = new_canvas(root, 820, 470, "#e9dcb8")
+    frame(c, "dance_bg", 0, 0, 820, 470)
+    label(c, 410, 16, "춤 도트 자세 (병장)", 15)
+    steps = character.DANCE_STEPS
+    poses = [("1. 가슴 앞", steps[0][1]), ("2. 툭 내리며 튕기기", steps[1][1]), ("3. 마지막 크게", steps[-1][1])]
+    for i, (name, pose) in enumerate(poses):
+        x = 20 + i * 265
+        character.draw_character(c, x, 44, 0.75, "병장", pose=pose, scale=1.0, tag="d" + str(i))
+        label(c, x + 120, 416, name, 13)
+    capture(root, c, path)
+
+
 def main():
     root = tk.Tk()
     root.overrideredirect(True)          # 제목줄 없이 캔버스만
@@ -217,10 +235,11 @@ def main():
         sprites_sheet(root, os.path.join(IMAGES, "sprites_preview.png"))
         faces_sheet(root, os.path.join(IMAGES, "faces_preview.png"))
         mock_prepare(root, os.path.join(OUT, "02_mock.png"))
+        dance_sheet(root, os.path.join(IMAGES, "dance_preview.png"))
     finally:
         pa.clear_cache()
         root.destroy()
-    for name in ("sprites_preview.png", "faces_preview.png"):
+    for name in ("sprites_preview.png", "faces_preview.png", "dance_preview.png"):
         shutil.copy(os.path.join(IMAGES, name), os.path.join(OUT, name))
         print("복사: _captures/" + name)
 
