@@ -6,6 +6,7 @@ import sys
 
 import pytest
 
+import character
 import db
 import game
 import symbols
@@ -83,3 +84,76 @@ def test_both_use_autoincrement(tmp_path):
     with open(SCHEMA_SQL, encoding="utf-8") as f:
         assert f.read().count("AUTOINCREMENT") == 2
     assert "AUTOINCREMENT" in db.CREATE_PLAYERS and "AUTOINCREMENT" in db.CREATE_RECORDS
+
+
+# ---- 3단계 캐릭터 리뷰 ----
+
+def drawn(tk_root, pose=None, scale=1.0, ratio=0.5, rank="상병"):
+    """캐릭터를 하나 그린 Canvas를 돌려준다."""
+    import tkinter as tk
+    c = tk.Canvas(tk_root, width=600, height=900)
+    character.draw_character(c, 10, 10, ratio, rank, pose=pose, scale=scale, tag="x")
+    return c
+
+
+def part_top(c, part):
+    return c.bbox("x&&" + part)[1]
+
+
+def test_body_and_head_move_up_together(tk_root):
+    """body_dy·head_dy가 양수면 몸통과 머리(계급장 포함)가 모두 위로 움직인다."""
+    still = drawn(tk_root)
+    bounced = drawn(tk_root, pose={"body_dy": 6, "head_dy": 6})
+    for part in ("body", "head", "badge"):
+        assert part_top(bounced, part) == part_top(still, part) - 6, part
+
+
+def test_badge_follows_head_only(tk_root):
+    """머리만 움직이면 계급장도 같은 만큼 움직이고 몸통은 그대로다."""
+    still = drawn(tk_root)
+    moved = drawn(tk_root, pose={"head_dy": 4})
+    assert part_top(moved, "head") - part_top(still, "head") == -4
+    assert part_top(moved, "badge") - part_top(still, "badge") == -4
+    assert part_top(moved, "body") == part_top(still, "body")
+
+
+BIG_POSE = {"arm_raise": 1.0, "hand_drop": 12, "body_dy": 12, "body_grow": 0.06, "head_dy": 12, "squint": 0.5}
+
+
+@pytest.mark.parametrize("pose", [None, {"arm_raise": 1.0}, {"hand_drop": 12}, BIG_POSE])
+@pytest.mark.parametrize("scale", [0.5, 1.0, 2.0])
+def test_dance_poses_stay_inside(tk_root, pose, scale):
+    """춤 자세와 크기 배율에서도 그림이 WIDTH×HEIGHT×배율 영역 안에 있다."""
+    c = drawn(tk_root, pose=pose, scale=scale)
+    x0, y0, x1, y1 = c.bbox("x")
+    assert x0 >= 10 and y0 >= 10
+    assert x1 <= 10 + character.WIDTH * scale + 1 and y1 <= 10 + character.HEIGHT * scale + 1
+
+
+def test_unknown_pose_key_is_an_error(tk_root):
+    """자세 이름에 오타가 있으면 조용히 무시하지 않고 오류를 낸다."""
+    with pytest.raises(ValueError):
+        drawn(tk_root, pose={"armraise": 1.0})
+
+
+def test_face_for_uses_mixing_path_at_ends():
+    """t=0·1에서도 섞기 계산을 거쳐 원본과 같고, 원본 목록을 그대로 내주지 않는다."""
+    zero = character.face_for(0.0)
+    assert zero == character.SEONGJAE
+    assert zero["mouth"] is not character.SEONGJAE["mouth"]
+    assert character.face_for(1.0)["mouth"] is not character.CHOISAN["mouth"]
+
+
+@pytest.mark.parametrize("squint", [1.0, 0.5])
+@pytest.mark.parametrize("ratio", [0.0, 0.5, 1.0])
+def test_pupil_fits_inside_eye(ratio, squint):
+    """눈동자 반지름은 눈 흰자의 실제 높이(설정 높이의 절반쯤)를 넘지 않는다."""
+    f = character.face_for(ratio)
+    assert character.pupil_radius(f, squint) <= f["eye_h"] * squint * 0.6
+
+
+def test_seongjae_brows_below_curly_fringe():
+    """성재 눈썹은 곱슬 앞머리 아래로 드러난다 (앞머리 끝보다 아래)."""
+    f = character.SEONGJAE
+    curl_bottom = f["fringe_y"] - 4 + 2 * 8
+    assert f["brow_y"] - f["brow_thick"] / 2 > curl_bottom
