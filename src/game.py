@@ -25,7 +25,8 @@ FIELD = 100.0          # 적이 나오는 곳(오른쪽 끝)에서 방어선(0)�
 ENEMY_SPEED = 5.0      # 1웨이브 적이 1초에 걷는 거리 (방어선까지 20초)
 SPEED_STEP = 10.0      # 웨이브마다 더 빨라지는 만큼
 SPEED_MAX = 33.0       # 상한: 방어선까지 최소 3초 (100 / 3 ≈ 33.3 → 33, 약 3.03초). 4웨이브부터
-SPAWN_GAP = 0.35       # 적이 나오는 간격(초). 느려진 만큼 촘촘히 나와 난이도를 맞춘다
+SPAWN_GAP = 0.30       # 적이 나오는 간격(초). 느려진 만큼·지원군만큼 촘촘히 나와 난이도를 맞춘다
+REINFORCE = ("연습탄", 1)   # 1웨이브를 병사 0명으로 시작하면 오는 지원군 (훈련병★1)
 BOSS_EVERY = 5         # 5웨이브마다 보스
 BOSS_HP_TIMES = 10
 LEAK_NORMAL, LEAK_BOSS = 1, 2
@@ -42,6 +43,7 @@ WAVE_SCORE = 100
 
 MSG_MISS = "꽝! 맞은 줄이 없습니다"
 MSG_FULL = "병사 칸이 꽉 찼습니다 (+50골드)"
+MSG_REINFORCE = "지원군 도착! 훈련병★1이 함께 싸웁니다"
 
 # 9칸 번호         같은 총알 3개를 검사하는 줄 8개
 #  0 1 2           가로 3줄, 세로 3줄, 대각선 2줄
@@ -122,6 +124,7 @@ class Game:
         self.board = []
         self.lines = 0
         self.message = ""
+        self.reinforced = False   # 이번 전투에 지원군이 왔는지
 
     # ---- 상태 ----
 
@@ -219,7 +222,11 @@ class Game:
     # ---- 전투 ----
 
     def start_battle(self):
-        """이번 웨이브의 적을 줄 세우고 전투를 시작한다. 보스는 5웨이브마다 마지막에 나온다."""
+        """이번 웨이브의 적을 줄 세우고 전투를 시작한다. 보스는 5웨이브마다 마지막에 나온다.
+        1웨이브를 병사 0명으로 시작하면 지원군 훈련병★1 한 명이 온다 (2웨이브부터는 오지 않는다)."""
+        self.reinforced = self.wave == 1 and not self.soldiers
+        if self.reinforced:
+            self.soldiers = [REINFORCE]
         hp = enemy_hp(self.wave)
         self.queue = [(hp, False)] * enemy_count(self.wave)
         if self.wave % BOSS_EVERY == 0:
@@ -229,7 +236,7 @@ class Game:
         self.spawned = 0          # 이번 웨이브에 나온 적 수 (화면에서 줄을 나누는 데 쓴다)
         self.wave_kills = 0
         self.phase = "battle"
-        self.message = ""
+        self.message = MSG_REINFORCE if self.reinforced else ""
 
     @property
     def battle_over(self):

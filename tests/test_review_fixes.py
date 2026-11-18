@@ -9,9 +9,10 @@ import pytest
 import character
 import db
 import game
+import pixel_art
 import symbols
 import ui
-from helpers import PatternRng, start, wait_until
+from helpers import PatternRng, pump, start, wait_until
 
 SCHEMA_SQL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schema.sql")
 
@@ -103,19 +104,22 @@ def part_top(c, part):
 
 
 def test_body_and_head_move_up_together(tk_root):
-    """body_dy·head_dy가 양수면 몸통과 머리(계급장 포함)가 모두 위로 움직인다."""
+    """body_dy·head_dy가 양수면 몸통과 머리(계급장 포함)가 모두 같은 만큼 위로 움직인다.
+    (3차 도트: 움직임은 도트 한 칸 단위라 px 대신 "도트 칸 수만큼"으로 확인)"""
+    dot = character.dot_size(1.0)
     still = drawn(tk_root)
-    bounced = drawn(tk_root, pose={"body_dy": 6, "head_dy": 6})
+    bounced = drawn(tk_root, pose={"body_dy": dot, "head_dy": dot})
     for part in ("body", "head", "badge"):
-        assert part_top(bounced, part) == part_top(still, part) - 6, part
+        assert part_top(bounced, part) == part_top(still, part) - dot, part
 
 
 def test_badge_follows_head_only(tk_root):
-    """머리만 움직이면 계급장도 같은 만큼 움직이고 몸통은 그대로다."""
+    """머리만 움직이면 계급장도 같은 만큼 움직이고 몸통은 그대로다. (3차 도트: 도트 한 칸 단위)"""
+    dot = character.dot_size(1.0)
     still = drawn(tk_root)
-    moved = drawn(tk_root, pose={"head_dy": 4})
-    assert part_top(moved, "head") - part_top(still, "head") == -4
-    assert part_top(moved, "badge") - part_top(still, "badge") == -4
+    moved = drawn(tk_root, pose={"head_dy": dot})
+    assert part_top(moved, "head") - part_top(still, "head") == -dot
+    assert part_top(moved, "badge") - part_top(still, "badge") == -dot
     assert part_top(moved, "body") == part_top(still, "body")
 
 
@@ -139,26 +143,31 @@ def test_unknown_pose_key_is_an_error(tk_root):
 
 
 def test_face_for_uses_mixing_path_at_ends():
-    """t=0·1에서도 섞기 계산을 거쳐 원본과 같고, 원본 목록을 그대로 내주지 않는다."""
-    zero = character.face_for(0.0)
-    assert zero == character.SEONGJAE
-    assert zero["mouth"] is not character.SEONGJAE["mouth"]
-    assert character.face_for(1.0)["mouth"] is not character.CHOISAN["mouth"]
+    """(3차 도트로 변경) t=0·1에서도 부위를 겹치는 계산을 거쳐 원본과 같고, 원본 목록·색표를 그대로 내주지 않는다."""
+    rows, colors = pixel_art.blend_face(0.0)
+    assert (rows, colors) == pixel_art.whole_face(pixel_art.SEONGJAE)
+    assert colors is not pixel_art.SEONGJAE["colors"]
+    rows[0] = "x"
+    assert pixel_art.blend_face(0.0)[0][0] != "x"
 
 
-@pytest.mark.parametrize("squint", [1.0, 0.5])
 @pytest.mark.parametrize("ratio", [0.0, 0.5, 1.0])
-def test_pupil_fits_inside_eye(ratio, squint):
-    """눈동자 반지름은 눈 흰자의 실제 높이(설정 높이의 절반쯤)를 넘지 않는다."""
-    f = character.face_for(ratio)
-    assert character.pupil_radius(f, squint) <= f["eye_h"] * squint * 0.6
+def test_pupil_fits_inside_eye(ratio):
+    """(3차 도트로 변경) 눈동자 점은 눈썹 아래, 눈 줄(10~11줄) 안에 있다."""
+    rows, _ = pixel_art.blend_face(ratio)
+    pupil_rows = {y for y, r in enumerate(rows) if "P" in r or "E" in r}
+    brow_rows = {y for y, r in enumerate(rows) if "B" in r}
+    assert pupil_rows and pupil_rows <= {9, 10, 11}
+    assert max(brow_rows) < min(pupil_rows)
 
 
 def test_seongjae_brows_below_curly_fringe():
-    """성재 눈썹은 곱슬 앞머리 아래로 드러난다 (앞머리 끝보다 아래)."""
-    f = character.SEONGJAE
-    curl_bottom = f["fringe_y"] - 4 + 2 * 8
-    assert f["brow_y"] - f["brow_thick"] / 2 > curl_bottom
+    """(3차 도트로 변경) 성재 눈썹은 곱슬 앞머리 아래로 드러난다 (눈썹 칸 위쪽에서 앞머리가 끝난다)."""
+    hair = pixel_art.SEONGJAE["layers"]["hair"]
+    brows = pixel_art.SEONGJAE["layers"]["eyes"]
+    brow_cells = {(x, y) for y, r in enumerate(brows) for x, ch in enumerate(r) if ch == "B"}
+    for x, y in brow_cells:
+        assert all(hair[yy][x] == pixel_art.CLEAR for yy in range(y, len(hair)))
 
 
 # ---- GUI 리뷰 ----
@@ -213,3 +222,75 @@ def test_spin_message_keeps_summons_when_some_slots_full():
     assert summoned == ["보통탄", "황금탄"]
     assert g.soldiers.count(("보통탄", 2)) == 1           # 보통탄은 짝과 합체
     assert "소환" in g.message and "+50골드" in g.message
+
+
+# ---- 3차(픽셀 아트) 리뷰 ----
+
+def test_photo_cache_separate_per_window_and_freed_on_close():
+    """창(Tk)마다 이미지를 따로 만들고, 창을 닫으면(App.close) 그 창의 캐시만 비운다."""
+    import tkinter as tk
+    a, b = tk.Tk(), tk.Tk()
+    try:
+        build = lambda: (["K"], {"K": "#000000"})   # noqa: E731
+        img_a = pixel_art.photo(a, "same", build)
+        img_b = pixel_art.photo(b, "same", build)
+        assert img_a is not img_b
+        assert str(img_a) in a.tk.call("image", "names") and str(img_b) in b.tk.call("image", "names")
+        pixel_art.forget(a)
+        assert all(key[0] is not a.tk for key in pixel_art._CACHE)
+        assert any(key[0] is b.tk for key in pixel_art._CACHE)
+    finally:
+        pixel_art.forget(b)
+        a.destroy()
+        b.destroy()
+
+
+def test_app_close_frees_its_images(tmp_path):
+    """게임 창을 닫으면 그 창의 도트 이미지 캐시가 남지 않는다."""
+    import tkinter as tk
+    root = tk.Tk()
+    root.withdraw()
+    interp = root.tk
+    app = ui.App(root, str(tmp_path / "g.db"), rng=PatternRng(PatternRng.WEAK), time_scale=0.01)
+    start(app)
+    assert any(key[0] is interp for key in pixel_art._CACHE)
+    app.close()
+    assert not any(key[0] is interp for key in pixel_art._CACHE)
+
+
+def test_soldiers_stop_firing_when_no_enemy(tk_root, tmp_path):
+    """적이 하나도 없는 틈에는 총알을 숨기고 병사도 사격 프레임에서 보통 그림으로 돌아온다."""
+    app = ui.App(tk_root, str(tmp_path / "g.db"), rng=PatternRng(PatternRng.STRONG), time_scale=1.0)
+    start(app)
+    app.spin_button.invoke()
+    wait_until(app, lambda: not app.busy)
+    app.battle_button.invoke()
+    wait_until(app, lambda: app.canvas.find_withtag("shot"), timeout=5)
+    app.cancel_all()
+    app.game.enemies = []
+    for tick in range(ui.SHOT_TICKS):          # 어느 틱이든 (쏘는 순간 포함)
+        app.tick_count = tick
+        app.draw_enemies()
+        app.draw_shots()
+        normal = {str(app.soldier_img(kind)) for _, kind in app.soldier_sprites}
+        shown = {app.canvas.itemcget(item, "image") for item, _ in app.soldier_sprites}
+        assert shown <= normal
+        assert all(app.canvas.itemcget(i, "state") == "hidden" for i in app.canvas.find_withtag("shot"))
+
+
+def test_enemy_items_match_enemies_during_battle(tk_root, tmp_path):
+    """전투 중 캔버스의 적 항목 수는 늘 (그림 + 체력 바탕 + 막대) × 지금 적 수다 (죽은 적 항목이 남지 않음)."""
+    app = ui.App(tk_root, str(tmp_path / "g.db"), rng=PatternRng(PatternRng.STRONG), time_scale=0.2)
+    start(app)
+    app.spin_button.invoke()
+    wait_until(app, lambda: not app.busy)
+    app.battle_button.invoke()
+    kills_seen = False
+    for _ in range(60):
+        pump(app, 20)
+        if app.screen != "game" or app.game.phase != "battle":
+            break
+        assert len(app.canvas.find_withtag("enemy")) == 3 * len(app.game.enemies)
+        assert len(app.enemy_items) == len(app.game.enemies)
+        kills_seen = kills_seen or app.game.kills > 0
+    assert kills_seen

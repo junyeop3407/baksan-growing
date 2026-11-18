@@ -1,6 +1,8 @@
-# tkinter 화면 5개(시작·게임·상점·게임 오버·랭킹)와 군대 배경, 스핀·전투·춤·말풍선 움직임을 맡는다.
-# 규칙은 game.py, 그림은 symbols.py·character.py, 저장은 db.py에 맡기고 여기서는 화면만 다룬다.
-# 게임 화면 왼쪽은 준비 단계(골드·3x3 슬롯판·[스핀][전투 시작]), 오른쪽은 전장(지휘관 박산·병사 6칸·적)이다.
+# tkinter 화면 5개(시작·게임·상점·게임 오버·랭킹)와 판타지 배경, 스핀·전투·춤·말풍선 움직임을 맡는다.
+# 규칙은 game.py, 그림은 pixel_art.py·symbols.py·character.py, 저장은 db.py에 맡기고 여기서는 화면만 다룬다.
+# 게임 화면 왼쪽은 준비 단계(골드·3x3 슬롯판·[스핀][전투 시작]), 오른쪽은 전장(지휘관 박산·병사 6칸·몬스터)이다.
+# 그림은 모두 도트 이미지(pixel_art.photo, 처음 한 번 만들어 캐시)이고, 전투 중 움직임은 캔버스 항목을
+# 새로 만들지 않고 coords(위치)와 itemconfig(그림 프레임)로 바꾼다.
 import random
 import sqlite3
 import tkinter as tk
@@ -8,8 +10,9 @@ from tkinter import ttk
 
 import character
 import db
+import pixel_art as pa
 from game import FIELD, LINES, MAX_HEARTS, Game, clean_name, shop_label
-from symbols import BULLETS, SOLDIERS, draw_bullet, draw_highlight
+from symbols import SOLDIERS, draw_bullet, draw_highlight
 
 TITLE = "박산 키우기"
 FONT = "Malgun Gothic"
@@ -30,10 +33,18 @@ CHAR_X, CHAR_Y = 392, 8            # 지휘관 박산 영역 왼쪽 위 (charact
 BUBBLE_BOX = (548, 18, 250, 124)   # 말풍선 영역 (x, y, 너비, 높이): 지휘관 오른쪽 위, 하트 글자 왼쪽까지
 SLOT_X, SLOT_Y = 392, 240          # 병사 칸 6개 (2열 × 3줄) 왼쪽 위
 SLOT_W, SLOT_H, SLOT_GAP = 76, 108, 6
-LINE_X = 572                       # 방어선 x
+LINE_X = 572                       # 방어선(바리케이드) 가운데 x
 ENEMY_X0, ENEMY_X1 = 592, 972      # 적 위치 0(방어선 앞)과 FIELD(나오는 곳)의 화면 x
 LANE_Y = (340, 446, 552)           # 적이 걷는 세 줄 (발 위치)
 HEART_X, HEART_Y = 868, 30         # 하트 첫 칸 가운데
+
+# 도트 배율과 움직임 (틱 = TICK_MS)
+SOLDIER_DOT = 3                    # 병사 22×20칸 → 66×60px
+DRAGON_DOT = 3                     # 드래곤 40×26칸 → 120×78px
+WALK_TICKS = 4                     # 적 걷기 프레임을 바꾸는 틱 수
+DRAGON_TICKS = 6                   # 드래곤 날갯짓
+SHOT_TICKS = 6                     # 총알이 총구에서 적까지 날아가는 틱 수
+MUZZLE = (21 * SOLDIER_DOT + 4, 11 * SOLDIER_DOT + 18)   # 병사 칸 왼쪽 위에서 총구까지 (px)
 
 # 게임 오버 화면의 캐릭터와 말풍선
 OVER_CHAR = (680, 220, 1.0)
@@ -57,18 +68,19 @@ MSG_NO_RECORDS = "아직 기록이 없습니다"
 MSG_READY = "스핀으로 병사를 모으고 [전투 시작]을 누르세요"
 
 # 색
-BG = "#e8ecdf"
-ARMY = "#4b5320"
-PANEL = "#fbfbf7"
+BG = "#26381f"          # 창이 캔버스보다 클 때 보이는 바깥 (어두운 숲색)
+PARCH = "#f3e6c4"       # 양피지 (판 안쪽, 그 위 글자 바탕)
 INK = "#1a1a1a"
+CREAM = "#fff6dc"       # 나무 판자·풀밭 위 글자
+SHADOW = "#2e1d12"      # 풀밭 위 글자 그림자
+WOOD_DARK = "#6e4423"
 HINT_GRAY = "#a0a0a0"   # 빈 판 안내 글씨
 NOTE_GRAY = "#6b6b6b"   # 오류가 아닌 안내 문구
 ERROR_RED = "#b00020"   # 오류 문구에만 쓴다
-HEART_RED = "#d62839"
-GOLD = "#b8860b"
+GOOD_GREEN = "#2d6a2d"
+GOLD = "#8a5a00"        # 골드 줄 (양피지 위에서 읽히는 진한 금색)
 FLASH = "#ffd60a"
-ENEMY_GRAY = "#7d7f84"
-ENEMY_DARK = "#4a4c50"
+CELL_BG = "#fbf3dc"
 
 
 class App:
@@ -94,6 +106,9 @@ class App:
         self.hero_place = (CHAR_X, CHAR_Y, HERO_SCALE)
         self.bubble_box = BUBBLE_BOX
         self.tick_count = 0
+        self.enemy_items = {}       # id(적) → (적, 그림, 체력 바탕, 체력 막대) 캔버스 항목
+        self.shot_items = {}        # 병사 칸 번호 → 날아가는 총알 그림 항목
+        self.soldier_sprites = []   # [(병사 그림 항목, 총알 종류)] 칸 순서
 
         try:
             db.init_db(db_path)
@@ -107,7 +122,8 @@ class App:
         root.configure(bg=BG)
         root.protocol("WM_DELETE_WINDOW", self.close)
         style = ttk.Style(root)
-        style.configure("Treeview", font=(FONT, TABLE_FONT_SIZE), rowheight=30)
+        style.configure("Treeview", font=(FONT, TABLE_FONT_SIZE), rowheight=30, background=CELL_BG,
+                        fieldbackground=CELL_BG)
         style.configure("Treeview.Heading", font=(FONT, TABLE_FONT_SIZE, "bold"))
         self.frame = tk.Frame(root, bg=BG)
         self.frame.pack(expand=True)
@@ -139,8 +155,9 @@ class App:
             self.cancel(job)
 
     def close(self):
-        """전투·춤·말풍선 예약을 모두 취소하고 창을 닫는다."""
+        """전투·춤·말풍선 예약을 모두 취소하고, 이 창의 도트 이미지 캐시를 비운 뒤 창을 닫는다."""
         self.cancel_all()
+        pa.forget(self.root)
         self.root.destroy()
 
     def clear(self):
@@ -153,41 +170,101 @@ class App:
         self.dancing = False
         self.bubble_text = ""
         self.bubble_job = None
+        self.enemy_items = {}
+        self.shot_items = {}
+        self.soldier_sprites = []
+
+    # ---- 도트 그림 도우미 ----
+
+    def new_canvas(self):
+        """화면 하나를 그릴 1000×600 캔버스."""
+        self.canvas = tk.Canvas(self.frame, width=CANVAS_W, height=CANVAS_H, highlightthickness=0, bg=BG)
+        self.canvas.pack()
+        return self.canvas
+
+    def scene(self, canvas, lanes=True):
+        """판타지 배경(하늘·산·성·숲·풀밭). lanes면 바리케이드 오른쪽에 몬스터가 걷는 흙길 세 줄."""
+        cells = tuple(y // pa.DOT for y in LANE_Y) if lanes else ()
+        img = pa.photo(canvas, ("scene", lanes), lambda: pa.scene(lanes=cells, field_x=LINE_X // pa.DOT + 2))
+        canvas.create_image(0, 0, image=img, anchor="nw", tags="scene")
+
+    def panel(self, canvas, x, y, w, h, inner="P", border=2, tag="panel"):
+        """(x, y)에 w×h px 나무 테두리 판을 놓는다 (inner P 양피지, W 나무 판자)."""
+        cols, rows = w // pa.DOT, h // pa.DOT
+        img = pa.photo(canvas, ("frame", cols, rows, inner, border), lambda: pa.wood_frame(cols, rows, border, inner))
+        return canvas.create_image(x, y, image=img, anchor="nw", tags=tag)
+
+    def shadow_text(self, canvas, x, y, text, size=11, anchor="nw", tags=()):
+        """풀밭·하늘 위에서도 읽히게 그림자를 깐 크림색 굵은 글자."""
+        canvas.create_text(x + 1, y + 1, text=text, anchor=anchor, font=(FONT, size, "bold"), fill=SHADOW, tags=tags)
+        canvas.create_text(x, y, text=text, anchor=anchor, font=(FONT, size, "bold"), fill=CREAM, tags=tags)
+
+    def plank(self, widget, px, dark):
+        """버튼용 나무 판자 그림 (dark면 눌 수 없을 때의 어두운 판자)."""
+        cols = px // pa.DOT
+
+        def build():
+            rows, colors = pa.wood_frame(cols, 11, 2, "W")
+            if dark:
+                colors = {k: pa.mix_color(v, "#3a3a3a", 0.5) for k, v in colors.items()}
+            return rows, colors
+        return pa.photo(widget, ("plank", cols, dark), build)
 
     def button(self, parent, text, command, width=12):
-        """국방색 바탕에 흰 글씨 버튼을 만든다."""
-        return tk.Button(parent, text=text, command=command, width=width, font=(FONT, 13, "bold"),
-                         bg=ARMY, fg="white", activebackground="#5f6a2c", activeforeground="white",
-                         disabledforeground="#b8bca8", relief="flat", pady=6)
+        """나무 판자 그림 위에 크림색 글씨 버튼 (width 10 이하 112px, 그보다 크면 136px)."""
+        px = 112 if width <= 10 else 136
+        b = tk.Button(parent, text=text, command=command, compound="center", font=(FONT, 13, "bold"),
+                      fg=CREAM, activeforeground="#ffffff", disabledforeground="#e6dcc0", bg=BG, activebackground=BG,
+                      relief="flat", bd=0, highlightthickness=0, padx=0, pady=0, cursor="hand2")
+        b.planks = (self.plank(parent, px, False), self.plank(parent, px, True))
+        b.config(image=b.planks[0])
+        return b
+
+    def set_enabled(self, button, enabled):
+        """버튼을 열거나 막고, 막힌 버튼은 어두운 판자로 보여 준다."""
+        button.config(state="normal" if enabled else "disabled", image=button.planks[0 if enabled else 1])
+
+    def sprite(self, key, build, scale=pa.DOT):
+        """지금 캔버스 창의 캐시된 도트 이미지."""
+        return pa.photo(self.canvas, key, build, scale)
+
+    def soldier_img(self, kind, firing=False):
+        return self.sprite(("soldier", kind, firing), lambda: pa.soldier(kind, firing), SOLDIER_DOT)
+
+    def enemy_img(self, kind, frame):
+        if kind == "dragon":
+            return self.sprite(("dragon", frame), lambda: pa.dragon(frame), DRAGON_DOT)
+        return self.sprite(("enemy", kind, frame), lambda: pa.enemy(kind, frame))
+
+    def sparkle_img(self, frame):
+        return self.sprite(("sparkle", frame), lambda: (pa.SPARKLE[frame], pa.SPARKLE_COLORS), 3)
 
     # ---- 시작 화면 ----
 
     def show_start(self):
-        """시작 화면: 제목, 이병 캐릭터, 이름 입력, [게임 시작] [랭킹 보기] [종료]."""
+        """시작 화면: 제목, 지휘대 위 이병 박산, 이름 입력, [게임 시작] [랭킹 보기] [종료]."""
         self.clear()
         self.screen = "start"
-        self.title_label = tk.Label(self.frame, text=TITLE, font=(FONT, 28, "bold"), bg=BG, fg=INK)
-        self.title_label.pack(pady=(10, 0))
-        scale = 0.75
-        face = tk.Canvas(self.frame, width=character.WIDTH * scale, height=character.HEIGHT * scale,
-                         bg=BG, highlightthickness=0)
-        face.pack()
-        character.draw_character(face, 0, 0, 0.0, "이병", scale=scale, tag="hero")
-        tk.Label(self.frame, text="계급: 이병", font=(FONT, 14), bg=BG, fg=INK).pack()
-        tk.Label(self.frame, text="이름 (1~10글자)", font=(FONT, 12), bg=BG, fg=INK).pack(pady=(8, 0))
-        self.name_entry = tk.Entry(self.frame, font=(FONT, 14), width=16, justify="center")
+        c = self.new_canvas()
+        self.scene(c, lanes=False)
+        self.panel(c, 260, 16, 480, 568)
+        self.title_label = tk.Label(c, text=TITLE, font=(FONT, 28, "bold"), bg=PARCH, fg=INK)
+        c.create_window(500, 60, window=self.title_label)
+        c.create_text(500, 100, text="군인 박산, 판타지 세계로 전입", font=(FONT, 12), fill=NOTE_GRAY)
+        character.draw_character(c, 410, 112, 0.0, "이병", scale=0.75, tag="hero")
+        c.create_text(500, 398, text="계급: 이병", font=(FONT, 14), fill=INK)
+        c.create_text(500, 428, text="이름 (1~10글자)", font=(FONT, 12), fill=INK)
+        self.name_entry = tk.Entry(c, font=(FONT, 14), width=16, justify="center", relief="solid", bd=1)
         self.name_entry.insert(0, self.player_name)
-        self.name_entry.pack()
         self.name_entry.bind("<Return>", lambda event: self.start_game())
-        self.name_message = tk.Label(self.frame, text="", font=(FONT, 11), bg=BG, fg=ERROR_RED)
-        self.name_message.pack()
-        buttons = tk.Frame(self.frame, bg=BG)
-        buttons.pack(pady=6)
-        self.start_button = self.button(buttons, "게임 시작", self.start_game)
-        self.ranking_button = self.button(buttons, "랭킹 보기", self.show_ranking)
-        self.quit_button = self.button(buttons, "종료", self.close)
-        for b in (self.start_button, self.ranking_button, self.quit_button):
-            b.pack(side="left", padx=6)
+        c.create_window(500, 456, window=self.name_entry)
+        self.name_message = tk.Label(c, text="", font=(FONT, 11), bg=PARCH, fg=ERROR_RED)
+        c.create_window(500, 486, window=self.name_message)
+        self.start_button = self.button(c, "게임 시작", self.start_game, width=10)
+        self.ranking_button = self.button(c, "랭킹 보기", self.show_ranking, width=10)
+        self.quit_button = self.button(c, "종료", self.close, width=10)
+        for x, b in zip((380, 500, 620), (self.start_button, self.ranking_button, self.quit_button)):
+            c.create_window(x, 540, window=b)
 
     def start_game(self):
         """이름을 확인하고 플레이어를 등록한 뒤 1웨이브 준비 단계를 시작한다."""
@@ -206,23 +283,21 @@ class App:
     # ---- 게임 화면 ----
 
     def show_game(self):
-        """게임 화면: 왼쪽 준비 단계(정보·3x3 판·버튼), 오른쪽 전장(지휘관·병사 6칸·방어선·적)."""
+        """게임 화면: 왼쪽 준비 단계(정보·3x3 판·버튼), 오른쪽 전장(지휘관·병사 6칸·바리케이드·몬스터)."""
         self.clear()
         self.screen = "game"
         self.hero_place = (CHAR_X, CHAR_Y, HERO_SCALE)
         self.bubble_box = BUBBLE_BOX
-        self.canvas = tk.Canvas(self.frame, width=CANVAS_W, height=CANVAS_H, highlightthickness=0, bg=BG)
-        self.canvas.pack()
-        self.draw_background()
+        c = self.new_canvas()
+        self.scene(c)
         self.draw_battlefield()
-        self.canvas.create_rectangle(20, 12, 360, 122, fill=PANEL, outline=INK, width=2)
-        self.canvas.create_rectangle(BOARD_X - 16, BOARD_Y - 16, BOARD_X + 3 * CELL + 16, BOARD_Y + 3 * CELL + 16,
-                                     fill=PANEL, outline=INK, width=3, tags="board")
-        self.canvas.create_rectangle(20, 528, 360, 590, fill=PANEL, outline=INK, width=2)
-        self.spin_button = self.button(self.canvas, "스핀", self.on_spin, width=10)
-        self.battle_button = self.button(self.canvas, "전투 시작", self.on_battle, width=10)
-        self.canvas.create_window(BOARD_X + 0.75 * CELL, BOARD_Y + 3 * CELL + 52, window=self.spin_button)
-        self.canvas.create_window(BOARD_X + 2.25 * CELL, BOARD_Y + 3 * CELL + 52, window=self.battle_button)
+        self.panel(c, 20, 12, 340, 112)
+        self.panel(c, BOARD_X - 16, BOARD_Y - 16, 3 * CELL + 32, 3 * CELL + 32, tag=("panel", "board"))
+        self.panel(c, 20, 528, 340, 64)
+        self.spin_button = self.button(c, "스핀", self.on_spin, width=10)
+        self.battle_button = self.button(c, "전투 시작", self.on_battle, width=10)
+        c.create_window(BOARD_X + 0.75 * CELL, BOARD_Y + 3 * CELL + 52, window=self.spin_button)
+        c.create_window(BOARD_X + 2.25 * CELL, BOARD_Y + 3 * CELL + 52, window=self.battle_button)
         self.draw_board(self.game.board, [])
         self.draw_soldiers()
         self.draw_hearts()
@@ -232,40 +307,23 @@ class App:
         self.set_message(MSG_READY, NOTE_GRAY)
         self.update_buttons()
 
-    def draw_background(self):
-        """하늘·막사·국기 게양대·연병장 배경을 도형으로 그린다."""
-        c = self.canvas
-        c.create_rectangle(0, 0, CANVAS_W, 236, fill="#bfe1f2", outline="")
-        c.create_polygon(0, 210, 180, 170, 360, 205, 560, 160, 780, 200, CANVAS_W, 165, CANVAS_W, 236, 0, 236,
-                         fill="#9db58a", outline="")
-        for x0 in (600, 800):
-            c.create_rectangle(x0, 168, x0 + 180, 236, fill="#8c9a7c", outline="#55604a", width=2)
-            c.create_polygon(x0 - 8, 168, x0 + 90, 146, x0 + 188, 168, fill="#5a6650", outline="#3f4838")
-            for wx in range(x0 + 14, x0 + 170, 34):
-                c.create_rectangle(wx, 186, wx + 20, 204, fill="#dfe8ef", outline="#55604a")
-        c.create_line(372, 236, 372, 60, fill="#6b6b6b", width=4)
-        c.create_polygon(374, 62, 380, 62, 380, 92, 374, 92, fill="#3d6b35", outline="")
-        c.create_rectangle(0, 236, CANVAS_W, CANVAS_H, fill="#d8c38e", outline="")
-        for y in range(262, CANVAS_H, 44):
-            c.create_line(0, y, CANVAS_W, y, fill="#cbb57e", width=2)
-
     def draw_battlefield(self):
-        """방어선(모래주머니 줄)과 적이 나오는 곳 표시를 그린다."""
+        """방어선(나무 바리케이드)과 몬스터가 나오는 곳 표시."""
         c = self.canvas
-        c.create_line(LINE_X, 246, LINE_X, CANVAS_H - 6, fill="#8b1a1a", width=4, dash=(10, 6))
-        for y in range(252, CANVAS_H - 10, 26):
-            c.create_oval(LINE_X - 12, y, LINE_X + 2, y + 20, fill="#a08a5a", outline="#6e5d36")
-        c.create_text(LINE_X + 10, 252, text="방어선", anchor="nw", font=(FONT, 11, "bold"), fill="#8b1a1a")
-        c.create_text(ENEMY_X1, 252, text="적 출현 ▶", anchor="ne", font=(FONT, 11, "bold"), fill=ENEMY_DARK)
+        rows = (CANVAS_H - 246) // pa.DOT
+        img = self.sprite(("barricade", rows), lambda: pa.barricade(rows))
+        c.create_image(LINE_X - 20, 246, image=img, anchor="nw", tags="barricade")
+        self.shadow_text(c, LINE_X + 26, 250, "방어선")
+        self.shadow_text(c, ENEMY_X1, 250, "몬스터 출현 ▶", anchor="ne")
 
     def draw_board(self, board, lines):
-        """9칸에 총알을 그리고, 맞은 줄의 칸은 노란 테두리로 강조한다."""
+        """9칸에 총알 도트를 그리고, 맞은 줄의 칸은 노란 테두리로 강조한다."""
         self.canvas.delete("cell")
         lit = {i for line in lines for i in line}
         for i in range(9):
             x = BOARD_X + (i % 3) * CELL
             y = BOARD_Y + (i // 3) * CELL
-            self.canvas.create_rectangle(x, y, x + CELL, y + CELL, fill="#ffffff", outline="#c8c8c0",
+            self.canvas.create_rectangle(x, y, x + CELL, y + CELL, fill=CELL_BG, outline="#cbb07a",
                                          tags=("board", "cell"))
             if board:
                 draw_bullet(self.canvas, board[i], x, y, CELL, tag=("board", "cell"))
@@ -276,7 +334,7 @@ class App:
                                     font=(FONT, 16, "bold"), fill=HINT_GRAY, tags=("board", "cell", "hint"))
 
     def draw_hero(self, pose=None):
-        """지금 계급의 얼굴과 계급장으로 박산을 다시 그린다 (게임 화면은 지휘관 자리에 0.6배)."""
+        """지금 계급의 얼굴과 계급장으로 지휘대 위 박산을 다시 그린다 (게임 화면은 지휘관 자리에 0.6배)."""
         x, y, scale = self.hero_place
         self.canvas.delete("hero")
         character.draw_character(self.canvas, x, y, self.game.face_ratio, self.game.rank,
@@ -288,40 +346,37 @@ class App:
         return SLOT_X + (i % 2) * (SLOT_W + SLOT_GAP), SLOT_Y + (i // 2) * (SLOT_H + SLOT_GAP)
 
     def draw_soldiers(self):
-        """병사 칸 6개와 병사(사람 모양 + 별 + 이름)를 그린다."""
+        """병사 칸 6개(나무 테두리)와 병사(도트 + 별 + 이름)를 그린다. 전투 중 사격 프레임도 처음으로 돌린다."""
         c = self.canvas
         c.delete("soldier")
+        self.soldier_sprites = []
+        cols, rows = SLOT_W // pa.DOT, SLOT_H // pa.DOT
+        slot = self.sprite(("slot", cols, rows), lambda: pa.wood_frame(cols, rows, 1, "P"))
         for i in range(6):
             x, y = self.slot_xy(i)
-            c.create_rectangle(x, y, x + SLOT_W, y + SLOT_H, fill="#f4efe0", outline="#6e5d36", width=2,
-                               dash=() if i < len(self.game.soldiers) else (4, 3), tags=("soldier", "slot_box"))
+            c.create_image(x, y, image=slot, anchor="nw", tags=("soldier", "slot_box"))
             if i >= len(self.game.soldiers):
                 c.create_text(x + SLOT_W / 2, y + SLOT_H / 2, text="빈 칸", font=(FONT, 10), fill=HINT_GRAY,
                               tags="soldier")
                 continue
             kind, star = self.game.soldiers[i]
-            self.draw_soldier_figure(x + SLOT_W / 2, y, kind, star)
+            self.draw_soldier_figure(x, y, kind, star)
 
-    def draw_soldier_figure(self, cx, y, kind, star):
-        """칸 하나에 병사를 그린다: 맨 위 별(★) 개수, 철모·얼굴·군복·소총, 맨 아래 병사 이름."""
+    def draw_soldier_figure(self, x, y, kind, star):
+        """칸 하나(왼쪽 위 x, y)에 병사를 그린다: 맨 위 도트 별 개수, 군복 병사 도트, 맨 아래 병사 이름."""
         c = self.canvas
-        tags = "soldier"
+        star_img = self.sprite(("star",), lambda: (pa.STAR, pa.STAR_COLORS), 2)
         for s in range(star):
-            sx = cx + (s - (star - 1) / 2) * 16
-            c.create_text(sx, y + 12, text="★", font=(FONT, 12, "bold"), fill=GOLD, tags=(tags, "star"))
-        band = BULLETS[kind]["tip_end"] if kind == "예광탄" else BULLETS[kind]["tip"]
-        c.create_oval(cx - 9, y + 30, cx + 9, y + 48, fill="#f2d3b8", outline=INK, tags=tags)
-        c.create_arc(cx - 11, y + 24, cx + 11, y + 44, start=0, extent=180, fill=ARMY, outline=INK, tags=tags)
-        c.create_rectangle(cx - 12, y + 48, cx + 12, y + 76, fill=character.UNIFORM, outline=INK, tags=tags)
-        c.create_rectangle(cx - 12, y + 54, cx + 12, y + 59, fill=band, outline="", tags=tags)
-        c.create_line(cx - 6, y + 76, cx - 7, y + 88, fill=INK, width=4, tags=tags)
-        c.create_line(cx + 6, y + 76, cx + 7, y + 88, fill=INK, width=4, tags=tags)
-        c.create_line(cx + 2, y + 64, cx + 32, y + 58, fill="#3b2f25", width=4, tags=tags)
-        c.create_text(cx, y + SLOT_H - 9, text=SOLDIERS[kind]["name"], font=(FONT, 10, "bold"), fill=INK,
-                      tags=tags)
+            sx = x + SLOT_W / 2 + (s - (star - 1) / 2) * 13
+            c.create_image(sx, y + 11, image=star_img, tags=("soldier", "star"))
+        item = c.create_image(x + 4, y + 18, image=self.soldier_img(kind), anchor="nw",
+                              tags=("soldier", "soldier_sprite"))
+        self.soldier_sprites.append((item, kind))
+        c.create_text(x + SLOT_W / 2, y + SLOT_H - 18, text=SOLDIERS[kind]["name"], font=(FONT, 10, "bold"), fill=INK,
+                      tags="soldier")
 
     def flash_slots(self, before):
-        """스핀 전과 달라진 병사 칸에 노란 테두리와 "합체!"·"소환" 글자를 잠깐 보여 준다."""
+        """스핀 전과 달라진 병사 칸에 노란 테두리와 "합체!"·"소환" 글자, 합체면 반짝임 도트를 잠깐 보여 준다."""
         c = self.canvas
         c.delete("flash")
         for i, soldier in enumerate(self.game.soldiers):
@@ -329,82 +384,103 @@ class App:
                 continue
             x, y = self.slot_xy(i)
             merged = soldier[1] > 1
-            c.create_rectangle(x - 2, y - 2, x + SLOT_W + 2, y + SLOT_H + 2, outline=FLASH, width=5, tags="flash")
-            c.create_rectangle(x + 2, y + 50, x + SLOT_W - 2, y + 72, fill=FLASH, outline=INK, tags="flash")
-            c.create_text(x + SLOT_W / 2, y + 61, text="합체! ★" + str(soldier[1]) if merged else "소환",
+            c.create_rectangle(x - 2, y - 2, x + SLOT_W + 2, y + SLOT_H + 2, outline=FLASH, width=4, tags="flash")
+            c.create_rectangle(x + 4, y + 52, x + SLOT_W - 4, y + 72, fill=FLASH, outline=INK, tags="flash")
+            c.create_text(x + SLOT_W / 2, y + 62, text="합체! ★" + str(soldier[1]) if merged else "소환",
                           font=(FONT, 11, "bold"), fill="#8b1a1a" if merged else INK, tags="flash")
+            if merged:
+                for k, (sx, sy) in enumerate(((x + 10, y + 30), (x + SLOT_W - 10, y + 40), (x + 16, y + 88))):
+                    c.create_image(sx, sy, image=self.sparkle_img(k % 2), tags=("flash", "sparkle"))
+        if c.find_withtag("sparkle"):
+            self.later(FLASH_MS / 3, self.twinkle)
+            self.later(FLASH_MS * 2 / 3, self.twinkle)
         self.later(FLASH_MS, lambda: self.canvas is not None and self.canvas.delete("flash"))
 
+    def twinkle(self):
+        """반짝임 도트의 큰 별·작은 별 프레임을 맞바꾼다."""
+        if self.canvas is None:
+            return
+        big, small = str(self.sparkle_img(0)), str(self.sparkle_img(1))
+        for item in self.canvas.find_withtag("sparkle"):
+            now = self.canvas.itemcget(item, "image")
+            self.canvas.itemconfig(item, image=small if now == big else big)
+
     def draw_hearts(self):
-        """오른쪽 위에 지금 하트 수만큼 빨간 하트를 그린다 (최대 5)."""
+        """오른쪽 위에 지금 하트 수만큼 도트 하트를 그린다 (최대 5)."""
         c = self.canvas
         c.delete("hearts")
         c.delete("hearts_label")
-        c.create_text(HEART_X - 22, HEART_Y, text="하트", anchor="e", font=(FONT, 12, "bold"), fill=INK,
-                      tags="hearts_label")
+        self.shadow_text(c, HEART_X - 22, HEART_Y, "하트", size=12, anchor="e", tags="hearts_label")
+        heart = self.sprite(("heart",), lambda: (pa.HEART, pa.HEART_COLORS), 3)
         for i in range(max(0, min(self.game.hearts, MAX_HEARTS))):
-            x = HEART_X + i * 26
-            points = [x, HEART_Y + 10, x - 11, HEART_Y - 1, x - 11, HEART_Y - 8, x - 6, HEART_Y - 12,
-                      x, HEART_Y - 7, x + 6, HEART_Y - 12, x + 11, HEART_Y - 8, x + 11, HEART_Y - 1]
-            c.create_polygon(points, fill=HEART_RED, outline="#7a0f1c", width=2, smooth=True, tags="hearts")
+            c.create_image(HEART_X - 13 + i * 28, HEART_Y - 12, image=heart, anchor="nw", tags="hearts")
 
     def enemy_screen_x(self, enemy):
         """적의 거리(0=방어선 ~ FIELD=나오는 곳)를 화면 x로 바꾼다."""
         return ENEMY_X0 + (ENEMY_X1 - ENEMY_X0) * max(0.0, enemy["x"]) / FIELD
 
     def draw_enemies(self):
-        """전장의 적(회색 군복 사람)과 보스(전차)를 체력 막대와 함께 그린다."""
+        """전장의 몬스터(웨이브에 따라 슬라임·고블린·해골 병사)와 보스 드래곤을 체력 막대와 함께 그린다.
+        이미 있는 몬스터는 캔버스 항목을 그대로 두고 위치(coords)와 걷기 프레임(itemconfig)만 바꾼다."""
         c = self.canvas
-        c.delete("enemy")
-        for enemy in sorted(self.game.enemies, key=lambda e: -e["x"]):
-            x = self.enemy_screen_x(enemy)
-            if enemy["boss"]:
-                y = LANE_Y[1]
-                self.draw_tank(x, y)
-                bar_y, bar_w = y - 64, 70
-            else:
-                y = LANE_Y[enemy.get("lane", 0) % 3]
-                self.draw_enemy_figure(x, y)
-                bar_y, bar_w = y - 66, 34
+        seen = set()
+        for enemy in self.game.enemies:
+            key = id(enemy)
+            entry = self.enemy_items.get(key)
+            if entry is not None and entry[0] is not enemy:
+                c.delete(*entry[1:])
+                entry = None
+            boss = enemy["boss"]
+            kind = "dragon" if boss else pa.enemy_kind(self.game.wave)
+            lane = 1 if boss else enemy.get("lane", 0) % 3
+            frame = (self.tick_count // (DRAGON_TICKS if boss else WALK_TICKS) + lane) % 2
+            img = self.enemy_img(kind, frame)
+            x = min(self.enemy_screen_x(enemy), CANVAS_W - img.width() / 2 - 2)   # 나올 때도 화면 안에
+            y = LANE_Y[lane]
+            top = y - img.height()
+            bar_w = 80 if boss else 40
             ratio = max(0.0, enemy["hp"] / enemy["max_hp"])
-            c.create_rectangle(x - bar_w / 2, bar_y, x + bar_w / 2, bar_y + 6, fill="#3a3a3a", outline="",
-                               tags="enemy")
-            c.create_rectangle(x - bar_w / 2, bar_y, x - bar_w / 2 + bar_w * ratio, bar_y + 6, fill="#e63946",
-                               outline="", tags="enemy")
-
-    def draw_enemy_figure(self, x, y):
-        """적 병사 한 명: 회색 군복, 왼쪽(방어선)을 보고 걷는다. y는 발 위치."""
-        c = self.canvas
-        c.create_line(x - 5, y - 16, x - 8, y, fill=ENEMY_DARK, width=4, tags="enemy")
-        c.create_line(x + 5, y - 16, x + 8, y, fill=ENEMY_DARK, width=4, tags="enemy")
-        c.create_rectangle(x - 11, y - 44, x + 11, y - 16, fill=ENEMY_GRAY, outline=INK, tags="enemy")
-        c.create_oval(x - 9, y - 60, x + 9, y - 42, fill="#d9c2aa", outline=INK, tags="enemy")
-        c.create_arc(x - 11, y - 66, x + 11, y - 46, start=0, extent=180, fill=ENEMY_DARK, outline=INK, tags="enemy")
-        c.create_line(x - 2, y - 32, x - 28, y - 28, fill="#2b2b2b", width=4, tags="enemy")
-
-    def draw_tank(self, x, y):
-        """보스: 왼쪽으로 포신을 겨눈 전차. y는 바퀴 아래."""
-        c = self.canvas
-        c.create_rectangle(x - 44, y - 18, x + 44, y, fill="#2f2f2f", outline=INK, width=2, tags="enemy")
-        for wx in range(-36, 44, 16):
-            c.create_oval(x + wx - 6, y - 15, x + wx + 6, y - 3, fill="#6b6b6b", outline=INK, tags="enemy")
-        c.create_rectangle(x - 40, y - 36, x + 40, y - 18, fill="#5b6b3a", outline=INK, width=2, tags="enemy")
-        c.create_oval(x - 18, y - 54, x + 20, y - 30, fill="#4b5a2e", outline=INK, width=2, tags="enemy")
-        c.create_rectangle(x - 62, y - 46, x - 14, y - 40, fill="#3a4524", outline=INK, tags="enemy")
-        c.create_text(x + 2, y - 27, text="BOSS", font=(FONT, 9, "bold"), fill="#ffd60a", tags="enemy")
+            if entry is None:
+                pic = c.create_image(x, y, image=img, anchor="s", tags=("enemy", kind))
+                back = c.create_rectangle(0, 0, 0, 0, fill="#3a3a3a", outline="", tags="enemy")
+                bar = c.create_rectangle(0, 0, 0, 0, fill="#e63946", outline="", tags="enemy")
+                entry = (enemy, pic, back, bar)
+                self.enemy_items[key] = entry
+            _, pic, back, bar = entry
+            c.coords(pic, x, y)
+            c.itemconfig(pic, image=img)
+            c.coords(back, x - bar_w / 2, top - 10, x + bar_w / 2, top - 4)
+            c.coords(bar, x - bar_w / 2, top - 10, x - bar_w / 2 + bar_w * ratio, top - 4)
+            seen.add(key)
+        for key in [k for k in self.enemy_items if k not in seen]:
+            c.delete(*self.enemy_items.pop(key)[1:])
 
     def draw_shots(self):
-        """병사마다 방어선에 가장 가까운 적에게 노란 탄 궤적을 그린다 (번갈아 깜박여 쏘는 것처럼)."""
+        """병사마다 총구에서 방어선에 가장 가까운 적까지 작은 도트 총알이 날아가고, 쏘는 순간 병사는 사격 프레임."""
         c = self.canvas
-        c.delete("shot")
-        if not self.game.enemies or self.tick_count % 2:
+        g = self.game
+        target = min(g.enemies, key=lambda e: e["x"]) if g.enemies else None
+        entry = self.enemy_items.get(id(target)) if target is not None else None
+        if entry is None:                                           # 쏠 적이 없는 틈: 총알을 숨기고 사격 자세를 푼다
+            c.itemconfig("shot", state="hidden")
+            for item, kind in self.soldier_sprites:
+                c.itemconfig(item, image=self.soldier_img(kind))
             return
-        target = min(self.game.enemies, key=lambda e: e["x"])
-        tx = self.enemy_screen_x(target)
-        ty = (LANE_Y[1] - 40) if target["boss"] else LANE_Y[target.get("lane", 0) % 3] - 32
-        for i in range(len(self.game.soldiers)):
+        x0, y0, x1, y1 = c.bbox(entry[1])
+        tx, ty = (x0 + x1) / 2, (y0 + y1) / 2                       # 적 그림 가운데를 겨눈다
+        shot_img = self.sprite(("shot",), lambda: (pa.SHOT, pa.SHOT_COLORS), 3)
+        for i, (item, kind) in enumerate(self.soldier_sprites):
             x, y = self.slot_xy(i)
-            c.create_line(x + SLOT_W / 2 + 32, y + 58, tx, ty, fill=FLASH, width=2, dash=(6, 4), tags="shot")
+            sx, sy = x + MUZZLE[0], y + MUZZLE[1]
+            phase = ((self.tick_count + i * 2) % SHOT_TICKS) / SHOT_TICKS
+            px, py = sx + (tx - sx) * phase, sy + (ty - sy) * phase
+            shot = self.shot_items.get(i)
+            if shot is None:
+                shot = c.create_image(px, py, image=shot_img, tags="shot")
+                self.shot_items[i] = shot
+            c.coords(shot, px, py)
+            c.itemconfig(shot, state="normal")
+            c.itemconfig(item, image=self.soldier_img(kind, firing=phase < 0.34))
 
     def update_info(self):
         """정보판 글자: 웨이브·계급·이름, 점수·처치, 골드·다음 스핀 비용."""
@@ -415,20 +491,20 @@ class App:
                  ("점수 " + str(g.score) + "    처치 " + str(g.kills), ""),
                  ("골드 " + str(g.gold) + "    다음 스핀 " + ("무료" if cost == 0 else str(cost)), "bold")]
         for n, (text, weight) in enumerate(lines):
-            self.canvas.create_text(36, 32 + n * 30, text=text, anchor="w", font=(FONT, 14, weight),
+            self.canvas.create_text(36, 36 + n * 29, text=text, anchor="w", font=(FONT, 14, weight),
                                     fill=GOLD if n == 2 else INK, tags="info")
 
     def set_message(self, text, color=INK):
         """판 아래 안내 문구 한 줄."""
         self.canvas.delete("msg")
-        self.canvas.create_text(190, 559, text=text, width=320, justify="center", font=(FONT, 12, "bold"), fill=color,
+        self.canvas.create_text(190, 560, text=text, width=300, justify="center", font=(FONT, 12, "bold"), fill=color,
                                 tags="msg")
 
     def update_buttons(self):
         """준비 단계이고 굴러가는 중·춤추는 중이 아닐 때만 버튼을 연다. [스핀]은 골드도 있어야 한다."""
         ready = self.game.phase == "prepare" and not self.busy and not self.dancing
-        self.spin_button.config(state="normal" if ready and self.game.can_spin() else "disabled")
-        self.battle_button.config(state="normal" if ready else "disabled")
+        self.set_enabled(self.spin_button, ready and self.game.can_spin())
+        self.set_enabled(self.battle_button, ready)
 
     # ---- 스핀 ----
 
@@ -462,13 +538,19 @@ class App:
     # ---- 전투 ----
 
     def on_battle(self):
-        """[전투 시작]: 버튼을 막고 전투를 시작한다. 준비 단계가 아니거나 굴러가는 중이면 무시한다."""
+        """[전투 시작]: 버튼을 막고 전투를 시작한다. 준비 단계가 아니거나 굴러가는 중이면 무시한다.
+        1웨이브를 병사 0명으로 시작하면 지원군(훈련병★1)이 오고 "지원군 도착!"을 보여 준다."""
         if self.busy or self.dancing or self.game.phase != "prepare":
             return
         self.busy = True
         self.game.start_battle()
         self.update_buttons()
-        self.set_message("전투 중! 병사들이 자동으로 쏩니다", INK)
+        if self.game.reinforced:
+            self.draw_soldiers()
+            self.flash_slots([])
+            self.set_message(self.game.message, GOOD_GREEN)
+        else:
+            self.set_message("전투 중! 병사들이 자동으로 쏩니다", INK)
         self.tick_count = 0
         self.later(TICK_MS, self.battle_tick)
 
@@ -489,9 +571,11 @@ class App:
             self.later(TICK_MS, self.battle_tick)
             return
         self.canvas.delete("shot")
+        self.shot_items = {}
+        self.draw_soldiers()
         if g.finish_wave() == "clear":
             self.update_info()
-            self.set_message("웨이브를 막았습니다! " + g.rank + " 진급", "#2d6a2d")
+            self.set_message("웨이브를 막았습니다! " + g.rank + " 진급", GOOD_GREEN)
             self.draw_hero()
             self.busy = False
             self.start_dance(self.show_shop)
@@ -520,7 +604,8 @@ class App:
         self.bubble_text = ""
 
     def start_dance(self, on_done):
-        """웨이브를 막은 춤을 춘다. 춤추는 동안은 말풍선을 유지하고 버튼을 막는다. 이미 추고 있으면 False."""
+        """웨이브를 막은 춤을 춘다(도트 자세 프레임을 바꿔 끼움). 춤추는 동안은 말풍선을 유지하고 버튼을 막는다.
+        이미 추고 있으면 False."""
         if self.dancing:
             return False
         self.dancing = True
@@ -544,34 +629,35 @@ class App:
     # ---- 상점 ----
 
     def show_shop(self):
-        """상점: 4가지 중 3개를 보여 주고 1개를 무료로 고른다."""
+        """상점: 4가지 중 3개를 나무 테두리 카드로 보여 주고 1개를 무료로 고른다."""
         g = self.game
         self.clear()
         self.screen = "shop"
-        tk.Label(self.frame, text="상점 — 하나를 무료로 고르세요", font=(FONT, 20, "bold"),
-                 bg=BG, fg=INK).pack(pady=(26, 6))
-        tk.Label(self.frame, text="계급 " + g.rank + "    다음 웨이브 " + str(g.wave) + "    하트 " + str(g.hearts)
-                 + "    골드 " + str(g.gold), font=(FONT, 13), bg=BG, fg=INK).pack()
-        row = tk.Frame(self.frame, bg=BG)
-        row.pack(pady=18)
+        c = self.new_canvas()
+        self.scene(c, lanes=False)
+        self.panel(c, 170, 14, 660, 92)
+        c.create_text(500, 42, text="상점 — 하나를 무료로 고르세요", font=(FONT, 20, "bold"), fill=INK)
+        c.create_text(500, 80, text="계급 " + g.rank + "    다음 웨이브 " + str(g.wave) + "    하트 " + str(g.hearts)
+                      + "    골드 " + str(g.gold), font=(FONT, 13), fill=INK)
         self.shop_buttons = []
-        for item, bullet in g.shop_offer(self.rng):
-            card = tk.Frame(row, bg=PANEL, highlightbackground=INK, highlightthickness=2)
-            card.pack(side="left", padx=12)
-            pic = tk.Canvas(card, width=160, height=150, bg=PANEL, highlightthickness=0)
+        for k, (item, bullet) in enumerate(g.shop_offer(self.rng)):
+            card = tk.Frame(c, bg=PARCH, highlightbackground=WOOD_DARK, highlightcolor=WOOD_DARK, highlightthickness=4)
+            pic = tk.Canvas(card, width=160, height=150, bg=PARCH, highlightthickness=0)
             pic.pack(padx=10, pady=(10, 0))
             self.draw_shop_icon(pic, item, bullet)
             title = "덱에 추가" if bullet else shop_label(item, bullet)   # 총알 이름은 그림 아래에 이미 있다
-            tk.Label(card, text=title, font=(FONT, 14, "bold"), bg=PANEL, fg=INK).pack()
-            tk.Label(card, text=self.shop_help(item, bullet), font=(FONT, 11), bg=PANEL, fg=NOTE_GRAY,
+            tk.Label(card, text=title, font=(FONT, 14, "bold"), bg=PARCH, fg=INK).pack()
+            tk.Label(card, text=self.shop_help(item, bullet), font=(FONT, 11), bg=PARCH, fg=NOTE_GRAY,
                      wraplength=180, height=2).pack()
             b = self.button(card, "고르기", lambda item=item, bullet=bullet: self.choose(item, bullet), width=10)
             b.pack(pady=10)
             self.shop_buttons.append(b)
+            c.create_window(270 + k * 230, 316, window=card)
+        self.panel(c, 120, 506, 760, 80)
         soldiers = "  ".join(SOLDIERS[k]["name"] + "★" + str(s) for k, s in g.soldiers) or "없음"
-        tk.Label(self.frame, text="병사: " + soldiers, font=(FONT, 12), bg=BG, fg=INK).pack()
+        c.create_text(500, 532, text="병사: " + soldiers, font=(FONT, 12), fill=INK, width=720)
         deck_text = "  ".join(kind + " " + str(n) for kind, n in g.deck_counts().items() if n)
-        tk.Label(self.frame, text="지금 덱: " + deck_text, font=(FONT, 12), bg=BG, fg=INK).pack(pady=(4, 0))
+        c.create_text(500, 560, text="지금 덱: " + deck_text, font=(FONT, 12), fill=INK, width=720)
 
     def shop_help(self, item, bullet):
         """상점 항목 설명 한 줄."""
@@ -582,18 +668,16 @@ class App:
                 "첫 스핀 무료": "다음 준비 단계 첫 스핀 0골드"}[item]
 
     def draw_shop_icon(self, pic, item, bullet):
-        """상점 카드 그림: 총알, 하트, 위 화살표, FREE 글자."""
+        """상점 카드 도트 그림: 총알, 하트, 위 화살표, FREE 동전."""
         if item == "총알 추가":
             draw_bullet(pic, bullet, 5, 0, 150)
-        elif item == "하트 +1":
-            pic.create_polygon(80, 120, 30, 70, 30, 45, 52, 30, 80, 50, 108, 30, 130, 45, 130, 70,
-                               fill=HEART_RED, outline="#7a0f1c", width=3, smooth=True)
-        elif item == "공격력 +10%":
-            pic.create_polygon(80, 20, 130, 80, 100, 80, 100, 130, 60, 130, 60, 80, 30, 80,
-                               fill="#e67e22", outline=INK, width=3)
-        else:
-            pic.create_oval(25, 25, 135, 125, fill="#ffd60a", outline=INK, width=3)
-            pic.create_text(80, 75, text="FREE", font=(FONT, 22, "bold"), fill=INK)
+            return
+        art = {"하트 +1": (pa.HEART, pa.HEART_COLORS, 12), "공격력 +10%": (pa.ARROW_UP, pa.ARROW_COLORS, 9),
+               "첫 스핀 무료": (pa.COIN, pa.COIN_COLORS, 9)}[item]
+        img = pa.photo(pic, ("shop", item), lambda: art[:2], art[2])
+        pic.create_image(80, 75, image=img)
+        if item == "첫 스핀 무료":
+            pic.create_text(80, 75, text="FREE", font=(FONT, 20, "bold"), fill=INK)
 
     def choose(self, item, bullet):
         """고른 항목을 적용하고 다음 웨이브 준비 단계를 시작한다 (2웨이브부터 말풍선)."""
@@ -616,22 +700,21 @@ class App:
         self.screen = "gameover"
         self.hero_place = OVER_CHAR
         self.bubble_box = OVER_BUBBLE
-        self.canvas = tk.Canvas(self.frame, width=CANVAS_W, height=CANVAS_H, highlightthickness=0, bg=BG)
-        self.canvas.pack()
-        self.draw_background()
+        c = self.new_canvas()
+        self.scene(c)
         self.draw_hero()
-        self.canvas.create_rectangle(60, 60, 560, 520, fill=PANEL, outline=INK, width=3)
+        self.panel(c, 60, 60, 500, 460)
         self.result_lines = ["점수 " + str(g.score), "도달한 웨이브 " + str(g.wave),
                              "처치 " + str(g.kills), "계급 " + g.rank]
-        self.canvas.create_text(310, 110, text="게임 오버", font=(FONT, 30, "bold"), fill="#8b1a1a")
+        c.create_text(310, 110, text="게임 오버", font=(FONT, 30, "bold"), fill="#8b1a1a")
         for n, text in enumerate(self.result_lines):
-            self.canvas.create_text(310, 175 + n * 44, text=text, font=(FONT, 18), fill=INK)
-        color = "#2d6a2d" if self.save_message == MSG_SAVED else ERROR_RED
-        self.canvas.create_text(310, 375, text=self.save_message, font=(FONT, 14, "bold"), fill=color)
-        self.retry_button = self.button(self.canvas, "다시하기", self.retry)
-        self.menu_button = self.button(self.canvas, "메인으로", self.show_start)
-        self.canvas.create_window(230, 455, window=self.retry_button)
-        self.canvas.create_window(390, 455, window=self.menu_button)
+            c.create_text(310, 175 + n * 44, text=text, font=(FONT, 18), fill=INK)
+        color = GOOD_GREEN if self.save_message == MSG_SAVED else ERROR_RED
+        c.create_text(310, 375, text=self.save_message, font=(FONT, 14, "bold"), fill=color)
+        self.retry_button = self.button(c, "다시하기", self.retry)
+        self.menu_button = self.button(c, "메인으로", self.show_start)
+        c.create_window(230, 455, window=self.retry_button)
+        c.create_window(390, 455, window=self.menu_button)
         self.show_bubble(BUBBLE_OVER, ms=None)
 
     def retry(self):
@@ -645,14 +728,17 @@ class App:
         """랭킹: DB 상위 10개 기록을 표로 보여 준다. 없거나 못 읽으면 문구로 알린다."""
         self.clear()
         self.screen = "ranking"
-        tk.Label(self.frame, text="랭킹 (상위 10)", font=(FONT, 22, "bold"), bg=BG, fg=INK).pack(pady=(30, 10))
+        c = self.new_canvas()
+        self.scene(c, lanes=False)
+        self.panel(c, 110, 20, 780, 560)
+        c.create_text(500, 66, text="랭킹 (상위 10)", font=(FONT, 22, "bold"), fill=INK)
         columns = [("rank", "순위", 60), ("name", "이름", 200), ("score", "점수", 100),
                    ("round", "웨이브", 80), ("stage", "계급", 90), ("date", "플레이 날짜", 200)]
-        self.ranking_tree = ttk.Treeview(self.frame, columns=[c[0] for c in columns], show="headings", height=10)
+        self.ranking_tree = ttk.Treeview(c, columns=[col[0] for col in columns], show="headings", height=10)
         for key, heading, width in columns:
             self.ranking_tree.heading(key, text=heading)
             self.ranking_tree.column(key, width=width, anchor="center")
-        self.ranking_tree.pack()
+        c.create_window(500, 274, window=self.ranking_tree)
         try:
             db.init_db(self.db_path)
             rows = db.get_top10(self.db_path)
@@ -668,7 +754,7 @@ class App:
                 self.ranking_tree.insert("", "end", values=(n, r["name"], r["score"], r["round_reached"],
                                                             r["growth_stage"], r["played_at"]))
         color = NOTE_GRAY if message == MSG_NO_RECORDS else ERROR_RED
-        self.ranking_message = tk.Label(self.frame, text=message, font=(FONT, 13), bg=BG, fg=color)
-        self.ranking_message.pack(pady=6)
-        self.ranking_back_button = self.button(self.frame, "뒤로", self.show_start)
-        self.ranking_back_button.pack(pady=6)
+        self.ranking_message = tk.Label(c, text=message, font=(FONT, 13), bg=PARCH, fg=color)
+        c.create_window(500, 470, window=self.ranking_message)
+        self.ranking_back_button = self.button(c, "뒤로", self.show_start)
+        c.create_window(500, 526, window=self.ranking_back_button)

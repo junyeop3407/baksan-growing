@@ -178,3 +178,38 @@
 | S3 | 1000웨이브도 33, 1~1000웨이브 모두 방어선까지 3초 이상 | tests/test_speed_cap.py |
 | S4 | 99웨이브 실제 전투: 2.9초엔 하트 그대로, 3.1초엔 -1 | tests/test_speed_cap.py |
 | S5 | 상점 총알 카드 굵은 줄 "덱에 추가" (콘솔 문구는 그대로) | tests/test_shop_card.py |
+
+## 3차: 픽셀 아트 그래픽 + 1웨이브 지원군 (2026-11-19 사장 승인)
+
+### 바꾼 승인 테스트 — 난이도 7개 (사장 허락: D안)
+| 테스트 | 이유 | 바뀐 내용 |
+|---|---|---|
+| A10 `test_game.py::test_a10_fail_first_wave` | 병사 0명이면 1웨이브는 지원군이 와서 막는다 | 1웨이브 막음 → 2웨이브 탈락: 웨이브 2, 일병, 점수 = 처치×10 + 100 |
+| N19 `test_defense.py::test_n19_no_soldiers_everyone_leaks` | 1웨이브는 지원군이 온다 | 2웨이브(지원군 없음)에서 확인: 하트 12 → 적 9명 통과 → 3, 처치 0, 웨이브 끝 |
+| N30① `test_autoplay.py::test_autoplay_fail_first_wave` | 같은 이유 | 꽝만 나와도 1웨이브는 막고 2웨이브 탈락 → DB (자동1, 2, 일병) |
+| F6 `test_ui.py::test_f6_gameover_bubble` | 게임 오버에 가려면 2웨이브까지 가야 함 | 탈락 방법만 `lose_at_wave_two`로 (확인 내용 그대로) |
+| H2 `test_ui.py::test_h2_one_full_game` | 같은 이유 | 2웨이브 탈락: 병사 [훈련병★1], 결과 문구 "점수 (처치×10+100)·웨이브 2·일병", DB (한판, 점수, 2, 일병) |
+| H4 `test_ui.py::test_h4_retry_same_name` | 같은 이유 | 탈락 방법만 `lose_at_wave_two`로 (다시하기 확인 내용 그대로) |
+| 게임 오버 말풍선 `test_ui.py::test_gameover_bubble_stays` | 같은 이유 | 탈락 방법만 `lose_at_wave_two`로 |
+- 도우미 `tests/helpers.py::lose_at_wave_two` (테스트 준비 코드): 1웨이브(지원군으로 막음) → 상점 첫 카드 → 2웨이브 꽝만 → 탈락
+
+### 바꾼 그림 테스트
+| 테스트 | 이유 | 바뀐 내용 |
+|---|---|---|
+| D1 `test_character.py` | 얼굴이 설정값 보간 → 도트 부위 바꾸기로 | 0% 도트 얼굴 = 성재 도트 얼굴 |
+| D2 `test_character.py` | 같은 이유 | 100% 도트 얼굴 = 최산 도트 얼굴 |
+| D3 `test_character.py` | "정확히 중간" → 부위별 | 50%(상병) = 머리·눈썹·눈 최산, 얼굴형·입·피부 성재 |
+| E2 `test_bullets.py` | 총알이 도형 2개 이상 → 도트 이미지 1장 | 총알 이미지 1장 + 이름 글자 |
+| `test_review_fixes.py::test_face_for_uses_mixing_path_at_ends` (회귀) | 설정값 dict가 없어짐 | 도트 얼굴도 겹치는 계산을 거치고 원본 목록을 내주지 않는다 |
+| `test_review_fixes.py::test_pupil_fits_inside_eye` (회귀) | 눈동자 반지름 → 도트 | 눈동자 점이 눈썹 아래 눈 줄(9~11줄) 안 |
+| `test_review_fixes.py::test_seongjae_brows_below_curly_fringe` (회귀) | 같은 이유 | 성재 눈썹 칸 위쪽에서 곱슬 앞머리가 끝남 |
+| `test_review_fixes.py::test_body_and_head_move_up_together`, `test_badge_follows_head_only` (회귀) | 도트는 한 칸 단위로만 움직인다 | 6px·4px → "도트 한 칸만큼" (함께 움직임·몸통 그대로는 같음) |
+| 1단계 디더링 테스트 3개 `test_pixel_art.py` (사장 허락) | 얼굴 섞기를 부위별 바꾸기로 | t=0 성재 / t=1 최산 / 계급마다 최산 부위 수 단조 + 단계별 바뀌는 부위 |
+- 그대로 통과한 그림 테스트: D4·D5·D6, E3, G5, 춤 자세 영역, 총알 60%·이름 글자, 앞머리 2가닥·눈썹 위, N28(칸 6·별·하트)
+
+### 새로 넣은 테스트
+| 파일 | 내용 |
+|---|---|
+| tests/test_reinforce.py (R1~R5) | 1웨이브 0명 → 지원군·"지원군 도착!" / 1웨이브 1명 이상이면 없음 / 2웨이브 0명이면 없음 / 간격 0.30 / 화면 문구·훈련병 칸 |
+| tests/test_pixel_art.py | 격자 줄 길이·색표 글자, 부위 크기, t=0/1, 단조·단계별 부위, 상병·하사 단계 바뀐 칸, 하사 눈동자·앞머리 2가닥, 지휘대, 웨이브별 몬스터, 이미지 캐시·참조 |
+| tests/test_pixel_ui.py (P1~P11) | 화면이 도트 이미지, 가비지 컬렉션 뒤에도 이미지 참조 유지, 최소 창(1000×620) 잘림 없음(게임·전투·게임 오버·시작·상점·랭킹), 몬스터는 같은 항목을 coords로 옮기고 걷기 2프레임, 웨이브별 몬스터·드래곤, 날아가는 도트 총알·사격 프레임, 합체 반짝임, 춤 프레임 3장 이상, 지휘대, 하트·판자 버튼 |

@@ -62,3 +62,13 @@ def play_round(app):
     spin_all(app)
     app.battle_button.invoke()
     wait_until(app, lambda: app.screen in ("shop", "gameover"), timeout=15.0)
+
+
+def lose_at_wave_two(app):
+    """꽝만 나오게 해서(PatternRng.WEAK) 1웨이브는 지원군 훈련병★1로 막고, 2웨이브에서 탈락한다.
+    (3차 1웨이브 지원군 규칙: 병사 0명으로 1웨이브를 시작하면 지원군이 와서 1웨이브 탈락이 거의 없다)"""
+    play_round(app)
+    assert app.screen == "shop", "1웨이브는 지원군으로 막아야 한다"
+    app.shop_buttons[0].invoke()
+    app.rng.i = 0                  # 상점이 choice()를 쓴 만큼 어긋난 순서를 맞춰 9칸이 늘 꽝이 되게 한다
+    play_round(app)

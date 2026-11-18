@@ -19,13 +19,13 @@ def canvas(tk_root):
 @pytest.mark.parametrize("size", SIZES)
 @pytest.mark.parametrize("kind", ["연습탄", "보통탄", "예광탄", "철갑탄", "황금탄"])
 def test_e2_bullet_has_picture_and_name(canvas, kind, size):
-    """E2: 칸마다 총알 그림과 이름 글자가 함께 있다."""
+    """E2 (3차 도트로 변경): 칸마다 총알 도트 그림(이미지 1장)과 이름 글자가 함께 있다."""
     symbols.draw_bullet(canvas, kind, 10, 10, size, tag="cell")
     items = canvas.find_withtag("cell")
     texts = [i for i in items if canvas.type(i) == "text"]
-    shapes = [i for i in items if canvas.type(i) != "text"]
+    pictures = [i for i in items if canvas.type(i) == "image"]
     assert [canvas.itemcget(i, "text") for i in texts] == [kind]
-    assert len(shapes) >= 2
+    assert len(pictures) == 1
 
 
 @pytest.mark.parametrize("size", SIZES)

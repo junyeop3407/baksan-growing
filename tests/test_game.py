@@ -86,13 +86,16 @@ def test_a5_lines_share_cells():
 
 
 def test_a10_fail_first_wave():
-    """A10: 1웨이브 탈락이면 도달 웨이브 1, 이병, 점수 = 처치 수 × 10."""
+    """A10 (3차 지원군 규칙으로 변경): 병사 0명이면 1웨이브는 지원군으로 막고, 2웨이브에서 탈락하면
+    도달 웨이브 2, 일병, 점수 = 처치 수 × 10 + 막은 웨이브 1 × 100."""
     g = game.Game()
     run_battle(g)
+    assert g.finish_wave() == "clear"
+    run_battle(g)
     assert g.finish_wave() == "over"
-    assert g.wave == 1
-    assert g.rank == "이병"
-    assert g.score == g.kills * 10
+    assert g.wave == 2
+    assert g.rank == "일병"
+    assert g.score == g.kills * 10 + 100
 
 
 def test_a11_rank_by_cleared_waves():

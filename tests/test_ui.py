@@ -8,7 +8,7 @@ import pytest
 import character
 import db
 import ui
-from helpers import PatternRng, pump, start, play_round, spin_all, wait_until
+from helpers import PatternRng, lose_at_wave_two, pump, start, play_round, spin_all, wait_until
 
 FAST = 0.01
 
@@ -114,10 +114,10 @@ def test_f5_sexy_bubble_from_wave_two(make_app):
 
 
 def test_f6_gameover_bubble(make_app):
-    """F6: 게임 오버 화면에 "she's so BAD..."."""
+    """F6: 게임 오버 화면에 "she's so BAD...". (3차: 1웨이브는 지원군이 오므로 2웨이브에서 탈락시켜 확인)"""
     app = make_app(PatternRng.WEAK)
     start(app)
-    play_round(app)
+    lose_at_wave_two(app)
     assert app.screen == "gameover"
     assert bubble_texts(app) == ["she's so BAD..."]
 
@@ -218,17 +218,19 @@ def test_h1_title(make_app):
 
 
 def test_h2_one_full_game(make_app, tmp_path):
-    """H2: 병사 0명으로 전투(꽝만 나옴) → 하트 0 → 게임 오버 화면 문구, DB에 웨이브 1·이병 1개."""
+    """H2 (3차 변경): 꽝만 나옴 → 1웨이브는 지원군 훈련병★1로 막고 2웨이브에서 하트 0 → 게임 오버 화면 문구,
+    DB에 웨이브 2·일병 1개 (점수 = 처치 × 10 + 100)."""
     app = make_app(PatternRng.WEAK)
     start(app, "한판")
-    play_round(app)
+    lose_at_wave_two(app)
     assert app.screen == "gameover"
-    assert app.game.soldiers == [] and app.game.hearts <= 0
+    assert app.game.soldiers == [("연습탄", 1)] and app.game.hearts <= 0
+    score = app.game.kills * 10 + 100
     text = " ".join(app.result_lines)
-    assert "점수 0" in text and "웨이브 1" in text and "이병" in text
+    assert "점수 " + str(score) in text and "웨이브 2" in text and "일병" in text
     assert app.save_message == "기록이 DB에 저장되었습니다"
     rows = db.get_top10(str(tmp_path / "game.db"))
-    assert [(r["name"], r["score"], r["round_reached"], r["growth_stage"]) for r in rows] == [("한판", 0, 1, "이병")]
+    assert [(r["name"], r["score"], r["round_reached"], r["growth_stage"]) for r in rows] == [("한판", score, 2, "일병")]
 
 
 def test_h3_ranking_columns(make_app):
@@ -241,10 +243,10 @@ def test_h3_ranking_columns(make_app):
 
 
 def test_h4_retry_same_name(make_app):
-    """H4: [다시하기] → 같은 이름, 1웨이브, 이병, 골드 500, 하트 3, 병사 0."""
+    """H4: [다시하기] → 같은 이름, 1웨이브, 이병, 골드 500, 하트 3, 병사 0. (3차: 2웨이브에서 탈락시켜 확인)"""
     app = make_app(PatternRng.WEAK)
     start(app, "다시")
-    play_round(app)
+    lose_at_wave_two(app)
     app.retry_button.invoke()
     assert app.screen == "game"
     assert app.player_name == "다시"
@@ -339,10 +341,10 @@ def test_pass_bubble_lasts_until_dance_ends(make_app):
 
 
 def test_gameover_bubble_stays(make_app):
-    """게임 오버 말풍선은 사라지지 않고 계속 보이며, 화면을 떠나면 지워진다."""
+    """게임 오버 말풍선은 사라지지 않고 계속 보이며, 화면을 떠나면 지워진다. (3차: 2웨이브에서 탈락시켜 확인)"""
     app = make_app(PatternRng.WEAK)
     start(app)
-    play_round(app)
+    lose_at_wave_two(app)
     pump(app, ui.BUBBLE_MS * FAST + 150)
     assert bubble_texts(app) == ["she's so BAD..."]
     app.menu_button.invoke()

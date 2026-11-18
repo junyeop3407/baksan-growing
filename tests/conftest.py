@@ -26,4 +26,6 @@ def tk_root():
         pytest.skip("화면(디스플레이)이 없어 tkinter 창을 만들 수 없음: " + str(last_error))
     root.withdraw()
     yield root
+    import pixel_art          # 닫는 창의 도트 이미지 캐시를 비워 테스트가 쌓여도 메모리에 남지 않게 한다
+    pixel_art.forget(root)
     root.destroy()

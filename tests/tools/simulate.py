@@ -47,7 +47,7 @@ def play_one(rng, strategy):
 def report(games):
     """전략마다 games판을 돌려 결과를 출력한다."""
     print("적 속도", game.ENEMY_SPEED, "+", game.SPEED_STEP, "× (웨이브-1), 최대", game.SPEED_MAX,
-          "/ 적 간격", game.SPAWN_GAP, "초 /", games, "판씩")
+          "/ 적 간격", game.SPAWN_GAP, "초 / 1웨이브 병사 0명이면 지원군 훈련병★1 /", games, "판씩")
     for strategy, label in [("random", "상점에서 아무거나"), ("best", "상점에서 가장 좋은 것")]:
         rng = random.Random(2026)
         results = [play_one(rng, strategy) for _ in range(games)]

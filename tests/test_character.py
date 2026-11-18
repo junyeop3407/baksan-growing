@@ -3,6 +3,7 @@
 import pytest
 
 import character
+import pixel_art
 import symbols
 
 RANK_NAMES = [name for name, _ in symbols.RANKS]
@@ -17,32 +18,24 @@ def channels(color):
 
 
 def test_d1_zero_is_seongjae():
-    """D1: 비율 0% 얼굴 설정값은 성재 설정값과 정확히 같다."""
-    assert character.face_for(0.0) == character.SEONGJAE
+    """D1 (3차 도트 얼굴로 변경): 비율 0% 도트 얼굴은 성재 도트 얼굴과 정확히 같다."""
+    assert pixel_art.blend_face(0.0) == pixel_art.whole_face(pixel_art.SEONGJAE)
 
 
 def test_d2_hundred_is_choisan():
-    """D2: 비율 100% 얼굴 설정값은 최산 설정값과 정확히 같다."""
-    assert character.face_for(1.0) == character.CHOISAN
+    """D2 (3차 도트 얼굴로 변경): 비율 100% 도트 얼굴은 최산 도트 얼굴과 정확히 같다."""
+    assert pixel_art.blend_face(1.0) == pixel_art.whole_face(pixel_art.CHOISAN)
 
 
 def test_d3_half_is_exact_middle():
-    """D3: 비율 50%면 숫자·색은 두 캐릭터 값의 정확히 중간이고, 모양의 점 개수는 같다."""
-    a, b = character.SEONGJAE, character.CHOISAN
-    assert set(a) == set(b)
-    half = character.face_for(0.5)
-    assert set(half) == set(a)
-    for key in a:
-        if is_color(a[key]):
-            # 색은 0~255 정수라 가운데가 .5로 떨어지면 반올림한다
-            for got, x, y in zip(channels(half[key]), channels(a[key]), channels(b[key])):
-                assert abs(got - (x + y) / 2) <= 0.5, key
-        elif isinstance(a[key], list):
-            assert len(a[key]) == len(b[key]) == len(half[key]), key
-            for (hx, hy), (ax, ay), (bx, by) in zip(half[key], a[key], b[key]):
-                assert hx == (ax + bx) / 2 and hy == (ay + by) / 2, key
-        else:
-            assert half[key] == (a[key] + b[key]) / 2, key
+    """D3 (3차 부위별 바뀌기로 변경): 비율 50%(상병)면 머리·눈썹·눈은 최산, 얼굴형·입·피부는 성재다."""
+    rows, colors = pixel_art.blend_face(0.5)
+    assert pixel_art.choisan_parts(0.5) == ["hair", "eyes"]
+    expected = pixel_art.compose({"hair": pixel_art.CHOISAN, "eyes": pixel_art.CHOISAN,
+                                  "shape": pixel_art.SEONGJAE, "skin": pixel_art.SEONGJAE})
+    assert (rows, colors) == expected
+    assert colors["S"] == pixel_art.SEONGJAE["colors"]["S"]
+    assert colors["H"] == pixel_art.CHOISAN["colors"]["H"]
 
 
 def test_d4_ratio_per_rank():

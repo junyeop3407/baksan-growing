@@ -193,11 +193,13 @@ def test_n18_shoot_closest_to_line():
 
 
 def test_n19_no_soldiers_everyone_leaks():
-    """N19: 병사 0명으로 전투하면 적이 모두 지나가고(처치 0), 하트가 남으면 웨이브는 끝난다."""
+    """N19 (3차 변경: 1웨이브는 지원군이 오므로 2웨이브에서 확인): 병사 0명으로 전투하면 적 9명이 모두
+    지나가고(처치 0), 하트가 남으면 웨이브는 끝난다."""
     g = game.Game()
-    g.hearts = 9
+    g.wave = 2
+    g.hearts = 12
     run_battle(g)
-    assert g.kills == 0 and g.hearts == 2
+    assert g.kills == 0 and g.hearts == 3
     assert g.finish_wave() == "clear"
 
 

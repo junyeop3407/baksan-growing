@@ -52,7 +52,7 @@ def new_app(path, pattern, size=BIG, time_scale=1.0):
 def freeze(app):
     """전투 예약을 멈춰 지금 장면을 그대로 둔다 (캡처용)."""
     app.cancel_all()
-    app.tick_count = 0
+    app.tick_count = 2          # 총알이 총구와 적 사이 가운데쯤 날아가는 순간
     app.draw_enemies()
     app.draw_shots()
 
