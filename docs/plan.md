@@ -116,7 +116,7 @@
 ## 지금 작업장 저장소 (확인함, 2026-11-18, `gh repo view` + `git ls-files`)
 | 항목 | 값 |
 |---|---|
-| GitHub 저장소 | junyeop3407/baksan-growing |
+| GitHub 저장소 | junyeop3407/baksan-growing-workspace (작업장, 2026-11-19 이름 변경. 제출 저장소가 junyeop3407/baksan-growing) |
 | 공개 여부 | 공개(PUBLIC) |
 | 만든 날 | 2026-11-18, 견본 저장소 junyeop3407/ai-workflow로 만듦 |
 | 들어 있는 것 | 작업장 파일(CLAUDE.md, HANDOFF.md, README.md, .claude/, setup/)과 `apps/baksan-growing` 하나뿐. 다른 앱이나 프로젝트는 없음 |
