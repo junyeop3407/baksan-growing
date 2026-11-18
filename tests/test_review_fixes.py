@@ -10,6 +10,8 @@ import character
 import db
 import game
 import symbols
+import ui
+from helpers import PatternRng, start, wait_until
 
 SCHEMA_SQL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schema.sql")
 
@@ -157,3 +159,32 @@ def test_seongjae_brows_below_curly_fringe():
     f = character.SEONGJAE
     curl_bottom = f["fringe_y"] - 4 + 2 * 8
     assert f["brow_y"] - f["brow_thick"] / 2 > curl_bottom
+
+
+# ---- GUI 리뷰 ----
+
+def test_db_recovers_after_startup_lock(tk_root, tmp_path):
+    """시작할 때 DB가 잠겨 준비에 실패해도, 잠금이 풀리면 랭킹 조회와 기록 저장이 된다."""
+    path = str(tmp_path / "game.db")
+    lock = sqlite3.connect(path)
+    lock.execute("BEGIN EXCLUSIVE")
+    app = ui.App(tk_root, path, rng=PatternRng(PatternRng.WEAK), time_scale=0.01)
+    lock.rollback()
+    lock.close()
+    assert app.db_ok is False
+    app.ranking_button.invoke()
+    assert app.ranking_message["text"] == "아직 기록이 없습니다"
+    app.ranking_back_button.invoke()
+    start(app)
+    app.show_gameover()
+    assert app.save_message == "기록이 DB에 저장되었습니다"
+
+
+def test_on_spin_guard_without_button(tk_root, tmp_path):
+    """버튼이 아니라 on_spin()을 직접 여러 번 불러도 굴러가는 동안은 한 번만 처리된다."""
+    app = ui.App(tk_root, str(tmp_path / "game.db"), rng=PatternRng(PatternRng.WEAK), time_scale=0.01)
+    start(app)
+    for _ in range(5):
+        app.on_spin()
+    wait_until(app, lambda: not app.busy)
+    assert app.game.spins_left == 4

@@ -41,9 +41,10 @@ def now_text():
 
 
 def connect(path):
-    """DB에 연결하고 외래 키 검사를 켠다."""
+    """DB에 연결하고 외래 키 검사를 켠다. 실패하면 sqlite3.Error가 난다."""
     # SQL: PRAGMA foreign_keys = ON
-    con = sqlite3.connect(path)
+    # 다른 프로그램이 잠그고 있으면 1초만 기다리고 sqlite3.OperationalError를 낸다.
+    con = sqlite3.connect(path, timeout=1.0)
     con.execute("PRAGMA foreign_keys = ON")
     return con
 

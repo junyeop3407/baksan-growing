@@ -316,3 +316,46 @@ def draw_rank_badge(canvas, bx, by, rank_name, scale=1.0, tags=()):
                            fill="#e8c547", width=4 * scale, tags=tags)
         canvas.create_rectangle(bx - 15 * scale, by + 6 * scale, bx + 15 * scale, by + 9.5 * scale,
                                 fill="#e8c547", outline="", tags=tags)
+
+
+def dance_pose(drop=0.0, bounce=0.0, grow=0.0, head=0.0):
+    """가슴 튕기기 춤의 한 자세: 팔은 가슴 높이로 들고 눈은 가늘게 뜬다."""
+    return {"arm_raise": 1.0, "squint": 0.5, "hand_drop": drop, "body_dy": bounce,
+            "body_grow": grow, "head_dy": head}
+
+
+def make_dance_steps():
+    """춤 순서를 (이 자세로 머무는 ms, 자세) 목록으로 만든다. 모두 약 3.1초."""
+    steps = [(400, dance_pose())]                                  # 1. 준비 0.4초
+    for _ in range(4):                                             # 2. 튕기기 4번, 박자당 0.4초
+        steps += [
+            (100, dance_pose(drop=10, bounce=5, grow=0.04)),       #    손을 툭 내리며 몸통이 위로·크게
+            (100, dance_pose(drop=10, bounce=5, grow=0.04, head=5)),  # 머리는 반 박자 늦게 따라 올라감
+            (100, dance_pose(head=5)),                             #    몸통은 원래대로
+            (100, dance_pose()),                                   #    머리도 원래대로
+        ]
+    steps += [
+        (300, dance_pose(drop=20, bounce=10, grow=0.08)),          # 3. 마지막 크게 (폭 2배)
+        (300, dance_pose(drop=20, bounce=10, grow=0.08, head=10)),
+        (500, dance_pose(drop=20, bounce=10, grow=0.08, head=10)),  #    끝난 자세로 0.5초 멈춤
+    ]
+    return steps
+
+
+DANCE_STEPS = make_dance_steps()
+
+
+def draw_bubble(canvas, x, y, w, h, text, tag="bubble"):
+    """(x, y)에서 시작하는 w×h 상자 안에 아래쪽 꼬리가 달린 말풍선을 그린다."""
+    tail = 18
+    body_bottom = y + h - tail
+    r = 18
+    outline = [x + r, y, x + w - r, y, x + w, y, x + w, y + r, x + w, body_bottom - r, x + w, body_bottom,
+               x + w - r, body_bottom, x + r, body_bottom, x, body_bottom, x, body_bottom - r, x, y + r, x, y]
+    canvas.create_polygon(outline, fill="#ffffff", outline=LINE, width=2, smooth=True, tags=tag)
+    tip_x = x + w * 0.62
+    canvas.create_polygon(tip_x - 14, body_bottom - 2, tip_x + 14, body_bottom - 2, tip_x + 4, y + h,
+                          fill="#ffffff", outline=LINE, width=2, tags=tag)
+    canvas.create_line(tip_x - 12, body_bottom - 1, tip_x + 12, body_bottom - 1, fill="#ffffff", width=3, tags=tag)
+    canvas.create_text(x + w / 2, y + (h - tail) / 2, text=text, width=w - 24,
+                       font=("Malgun Gothic", -22, "bold"), fill="#1a1a1a", tags=tag)
