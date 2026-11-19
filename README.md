@@ -9,7 +9,7 @@
 |---|---|
 | 1. 기획서 | [기획서.md](./기획서.md) |
 | 2. 코드 | [src 폴더](./src) |
-| 3. 실행파일 | Release 링크(공개 후 채움) |
+| 3. 실행파일 | [Release v1.0.0](https://github.com/junyeop3407/baksan-growing/releases/tag/v1.0.0) |
 | 4. 깃 주소 | 현재 저장소 |
 
 ## DB 연동
