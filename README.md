@@ -42,7 +42,7 @@ DB Browser for SQLite로 연 game.db (records 테이블):
 한국폴리텍대학 인천캠퍼스 컴퓨터공학과 / 파이썬 기말과제 / 백준엽
 
 ## 실행 방법
-1. **실행파일**: `박산키우기.exe`를 내려받아 실행한다 (Python이 없어도 된다). Windows "PC 보호" 창이 뜨면 **[추가 정보] → [실행]** 을 누른다. 서명하지 않은 개인 과제 프로그램이라 뜨는 경고다.
+1. **실행파일**: [Release v1.0.0](https://github.com/junyeop3407/baksan-growing/releases/tag/v1.0.0)에서 `baksan-growing.exe`를 내려받아 실행한다 (Python이 없어도 된다). Windows "PC 보호" 창이 뜨면 **[추가 정보] → [실행]** 을 누른다. 서명하지 않은 개인 과제 프로그램이라 뜨는 경고다.
 2. **소스**: Python 3.11 이상(Tk 8.6·9에서 확인)에서 `py src/main.py` (Mac·Linux는 `python3 src/main.py`)
 
 ## 게임 방법
