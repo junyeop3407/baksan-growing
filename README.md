@@ -34,9 +34,9 @@
 
 ![랭킹 화면](./images/ranking.png)
 
-DB Browser for SQLite로 연 game.db:
+DB Browser for SQLite로 연 game.db (records 테이블):
 
-<!-- ![DB Browser로 연 game.db](./images/db_browser.png) -->
+![DB Browser로 연 game.db](./images/db_browser.png)
 
 ## 과제 정보
 한국폴리텍대학 인천캠퍼스 컴퓨터공학과 / 파이썬 기말과제 / 백준엽
