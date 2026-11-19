@@ -7,13 +7,13 @@
 ![게임 화면](./images/game.png)
 
 ## 과제 제출물 바로가기
-| 제출물 | 설명 (README 안) | 실제 파일 |
-|---|---|---|
-| 1. 기획서 | [1. 기획서](#1-기획서) | [기획서.md](./기획서.md) |
-| 2. 코드 | [2. 코드](#2-코드) | [src 폴더](./src) |
-| 3. 실행파일 | [3. 실행파일](#3-실행파일) | [Release v1.0.0 (baksan-growing.exe)](https://github.com/junyeop3407/baksan-growing/releases/tag/v1.0.0) |
-| 4. DB 연동 | [4. DB 연동](#4-db-연동) | [schema.sql](./schema.sql), [src/db.py](./src/db.py) |
-| 5. 깃 주소 | [5. 깃 주소](#5-깃-주소) | https://github.com/junyeop3407/baksan-growing ([커밋 기록](https://github.com/junyeop3407/baksan-growing/commits/main)) |
+| 제출물 | 실제 파일 |
+|---|---|
+| [1. 기획서](#1-기획서) | [기획서.md](./기획서.md) |
+| [2. 코드](#2-코드) | [src 폴더](./src) |
+| [3. 실행파일](#3-실행파일) | [Release v1.0.0 (baksan-growing.exe)](https://github.com/junyeop3407/baksan-growing/releases/tag/v1.0.0) |
+| [4. DB 연동](#4-db-연동) | [schema.sql](./schema.sql), [src/db.py](./src/db.py) |
+| [5. 깃 주소](#5-깃-주소) | https://github.com/junyeop3407/baksan-growing ([커밋 기록](https://github.com/junyeop3407/baksan-growing/commits/main)) |
 
 ## 1. 기획서
 [기획서.md](./기획서.md)에 프로젝트 개요, 개발 환경, 게임 규칙(스핀·소환·합체·전투·상점·점수), 화면 구성, 기능 목록을 정리했다.
